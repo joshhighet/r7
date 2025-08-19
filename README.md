@@ -69,4 +69,8 @@ if you want to globally invoke this, add it to your path. choose your own destin
    r7 config set --no-vm-verify-ssl && r7 vm config-test
    ```
 
-_here be the end of hand-crafted instructions and manually typed files. mostly made with Grok 4 Heavy & Claude Code_
+here be the end of hand-crafted instructions and manually typed files.
+
+---
+
+_mostly made with Grok 4 Heavy & Claude Code_
