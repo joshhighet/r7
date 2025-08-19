@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+# r7 wrapper for pathuse
+
+setopt ERR_EXIT
+SCRIPT_DIR="${0:A:h}"
+if [[ ! -d "$SCRIPT_DIR/.venv" ]]; then
+  print -P "%F{red}✗%f No venv found. Create it using:"
+  print -P "  %F{cyan}python3 -m venv $SCRIPT_DIR/.venv%f"
+  print -P "\nThen activate and install packages:"
+  print -P "  %F{cyan}source $SCRIPT_DIR/.venv/bin/activate && pip install -r $SCRIPT_DIR/requirements.txt%f"
+  exit 1
+fi
+source "$SCRIPT_DIR/.venv/bin/activate"
+exec python3 "$SCRIPT_DIR/r7.py" "$@"
