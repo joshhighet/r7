@@ -1,6 +1,6 @@
 # r7 CLI
 
-unofficial CLI for logsearch, asset graph, web app / net vulns
+unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net vulns
 
 ```zsh
 -> account (management)
