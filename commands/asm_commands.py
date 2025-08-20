@@ -147,8 +147,9 @@ def asm_profile(ctx, output):
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
 @click.option('--all-types', is_flag=True, help='Show all types instead of truncating to first 3')
 @click.option('--exclude-apps', help='Comma-separated list of app IDs to exclude from output')
+@click.option('--full-output', is_flag=True, help='Include all fields in JSON output (default shows minimal fields matching table view)')
 @click.pass_context
-def asm_apps(ctx, output, no_cache, all_types, exclude_apps):
+def asm_apps(ctx, output, no_cache, all_types, exclude_apps, full_output):
     """List Surface Command apps"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -183,7 +184,30 @@ def asm_apps(ctx, output, no_cache, all_types, exclude_apps):
                     console.print(f"[dim]📝 Excluded {excluded_count} app(s) from output[/dim]")
         
         if use_json:
-            click.echo(json.dumps(data, indent=2))
+            # Create minimal output by default to save context window space
+            if full_output:
+                # Full output - include all fields
+                click.echo(json.dumps(data, separators=(',', ':')))
+            else:
+                # Minimal output - only include fields shown in table view
+                minimal_data = {}
+                for app_id, app_data in data.items():
+                    # Extract only the fields shown in the table
+                    minimal_app = {
+                        'id': app_id,
+                        'name': app_data.get('name', 'Unknown'),
+                        'version': app_data.get('version', 'Unknown'),
+                        'types': app_data.get('types', [])
+                    }
+                    
+                    # Add created date if available
+                    metadata = app_data.get('stored_object_metadata', {})
+                    if metadata.get('created'):
+                        minimal_app['created'] = metadata['created']
+                    
+                    minimal_data[app_id] = minimal_app
+                
+                click.echo(json.dumps(minimal_data, separators=(',', ':')))
         else:
             # Display in table format - API returns apps as a dictionary with app IDs as keys
             if not data or not isinstance(data, dict):
