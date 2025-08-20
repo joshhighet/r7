@@ -379,6 +379,32 @@ def cypher_query(ctx, query, columns, output, limit, start, depth, order, use_pr
     except (APIError, QueryError) as e:
         click.echo(f"❌ {e}", err=True)
 
+@cypher_group.command(name='docs')
+def cypher_docs():
+    """Show Cypher DSL reference guide"""
+    try:
+        import os
+        from pathlib import Path
+        
+        # Get the path to the Cypher reference file
+        current_dir = Path(__file__).parent.parent
+        cypher_file = current_dir / 'docs/cypher-dsl.md'
+        
+        if not cypher_file.exists():
+            click.echo("❌ Cypher reference file not found: cypher-dsl.md", err=True)
+            return
+            
+        # Read and display the markdown file
+        with open(cypher_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Output as plain text to avoid centered headers
+        click.echo(content)
+            
+    except Exception as e:
+        click.echo(f"❌ Error displaying Cypher help: {e}", err=True)
+
+
 @cypher_group.command(name='examples')
 @click.option('--output', type=click.Choice(['table', 'json', 'plain', 'cmd']), default='plain', help='How to display the examples')
 @click.option('--test', is_flag=True, help='Execute each example and report results (requires valid API key & region)')
