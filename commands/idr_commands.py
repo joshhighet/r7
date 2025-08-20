@@ -623,8 +623,9 @@ def alert_group(ctx):
 @click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
               help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
+@click.option('--full-output', is_flag=True, help='Include all fields in JSON output (default shows minimal fields matching table view)')
 @click.pass_context
-def list_alerts(ctx, limit, rrns_only, output, no_cache):
+def list_alerts(ctx, limit, rrns_only, output, no_cache, full_output):
     """List alerts"""
     try:
         config_manager = ConfigManager()
@@ -650,7 +651,39 @@ def list_alerts(ctx, limit, rrns_only, output, no_cache):
 
         # Output
         if output == 'json':
-            click.echo(json.dumps(alerts, indent=2))
+            if full_output:
+                # Full output - include all fields
+                click.echo(json.dumps(alerts, indent=2))
+            else:
+                # Minimal output - only include fields shown in table view
+                if rrns_only:
+                    # For rrns_only, keep simple structure
+                    minimal_data = {
+                        'rrns': alerts.get('rrns', []),
+                        'metadata': alerts.get('metadata', {}),
+                        'region_failures': alerts.get('region_failures', [])
+                    }
+                else:
+                    # Create minimal alert data matching table view
+                    minimal_alerts = []
+                    for alert in alerts.get('alerts', []):
+                        # Extract only the fields shown in the table
+                        minimal_alert = {
+                            'rrn': alert.get('rrn'),
+                            'title': alert.get('title'),
+                            'status': alert.get('status'),
+                            'priority': alert.get('priority'),
+                            'created_at': alert.get('created_at')
+                        }
+                        minimal_alerts.append(minimal_alert)
+                    
+                    minimal_data = {
+                        'alerts': minimal_alerts,
+                        'metadata': alerts.get('metadata', {}),
+                        'region_failures': alerts.get('region_failures', [])
+                    }
+                
+                click.echo(json.dumps(minimal_data, indent=2))
         elif output == 'simple':
             if rrns_only:
                 # When rrns_only=True, the response contains RRNs in the 'rrns' field
