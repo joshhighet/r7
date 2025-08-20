@@ -94,8 +94,9 @@ def investigation_group(ctx):
               help='Output format')
 @click.option('--limit', type=int, default=None, help='Maximum number of investigations to return')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
+@click.option('--full-output', is_flag=True, help='Include all fields in JSON output (default shows minimal fields matching table view)')
 @click.pass_context
-def list_investigations(ctx, status, priority, assignee, start_time, end_time, output, limit, no_cache):
+def list_investigations(ctx, status, priority, assignee, start_time, end_time, output, limit, no_cache, full_output):
     """List investigations with optional filtering"""
     try:
         config_manager = ConfigManager()
@@ -140,7 +141,29 @@ def list_investigations(ctx, status, priority, assignee, start_time, end_time, o
 
         # Output
         if output == 'json':
-            click.echo(json.dumps(investigations_display, indent=2))
+            if full_output:
+                # Full output - include all fields
+                click.echo(json.dumps(investigations_display, indent=2))
+            else:
+                # Minimal output - only include fields shown in table view
+                minimal_investigations = []
+                for investigation in data:
+                    # Extract only the fields shown in the table: ID, Title, Status, Priority, Assignee, Created
+                    minimal_investigation = {
+                        'rrn': investigation.get('rrn'),
+                        'title': investigation.get('title'),
+                        'status': investigation.get('status'),
+                        'priority': investigation.get('priority'),
+                        'assignee': investigation.get('assignee'),
+                        'created_time': investigation.get('created_time')
+                    }
+                    minimal_investigations.append(minimal_investigation)
+                
+                minimal_data = {
+                    'data': minimal_investigations
+                }
+                
+                click.echo(json.dumps(minimal_data, indent=2))
         elif output == 'simple':
             for investigation in data:
                 # Extract short ID for simple output too
