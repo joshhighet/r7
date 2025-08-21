@@ -450,13 +450,14 @@ def logs_leql():
 @click.argument('query', required=False, default='')
 @click.option('--time-range', default='Last 30 days', help='Time range')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.option('--no-smart-columns', is_flag=True, help='Disable smart columns and use simple content display')
 @click.option('--smart-columns-max', type=int, help='Maximum number of smart columns to display')
 @click.option('--max-chars', type=int, help='Maximum characters to display per log entry (overrides global config)')
 @click.pass_context
-def query_log(ctx, log_name_or_id, query, time_range, output, max_result_pages, no_cache, no_smart_columns, smart_columns_max, max_chars):
+def query_log(ctx, log_name_or_id, query, time_range, output, full_output, max_result_pages, no_cache, no_smart_columns, smart_columns_max, max_chars):
     """Query InsightIDR log with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -494,7 +495,21 @@ def query_log(ctx, log_name_or_id, query, time_range, output, max_result_pages, 
         else:
             data = cached_result
         if use_json:
-            click.echo(json.dumps(data, indent=2))
+            if full_output:
+                click.echo(json.dumps(data, indent=2))
+            else:
+                # Show only raw log messages by default
+                events = data.get('events', [])
+                messages = []
+                for event in events:
+                    message = event.get('message', '')
+                    # Try to parse JSON message, fallback to raw string if not JSON
+                    try:
+                        parsed_message = json.loads(message)
+                        messages.append(parsed_message)
+                    except (json.JSONDecodeError, TypeError):
+                        messages.append(message)
+                click.echo(json.dumps(messages))
         else:
             # Check if we have events OR statistics
             has_events = 'events' in data and data['events']
@@ -625,10 +640,11 @@ def query_log(ctx, log_name_or_id, query, time_range, output, max_result_pages, 
 @click.argument('query', required=False, default='')
 @click.option('--time-range', default='Last 30 days', help='Time range')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.pass_context
-def query_logset(ctx, logset_name_or_id, query, time_range, output, max_result_pages, no_cache):
+def query_logset(ctx, logset_name_or_id, query, time_range, output, full_output, max_result_pages, no_cache):
     """Query an entire logset with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -653,7 +669,21 @@ def query_logset(ctx, logset_name_or_id, query, time_range, output, max_result_p
             data = cached_result
             
         if use_json:
-            click.echo(json.dumps(data, indent=2))
+            if full_output:
+                click.echo(json.dumps(data, indent=2))
+            else:
+                # Show only raw log messages by default
+                events = data.get('events', [])
+                messages = []
+                for event in events:
+                    message = event.get('message', '')
+                    # Try to parse JSON message, fallback to raw string if not JSON
+                    try:
+                        parsed_message = json.loads(message)
+                        messages.append(parsed_message)
+                    except (json.JSONDecodeError, TypeError):
+                        messages.append(message)
+                click.echo(json.dumps(messages))
         else:
             # Check if we have events OR statistics
             has_events = 'events' in data and data['events']
@@ -694,10 +724,11 @@ def query_logset(ctx, logset_name_or_id, query, time_range, output, max_result_p
 @click.argument('query', required=False, default='')
 @click.option('--time-range', default='Last 30 days', help='Time range')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.pass_context
-def query_all_logsets(ctx, query, time_range, output, max_result_pages, no_cache):
+def query_all_logsets(ctx, query, time_range, output, full_output, max_result_pages, no_cache):
     """Query all logsets at once with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -741,7 +772,21 @@ def query_all_logsets(ctx, query, time_range, output, max_result_pages, no_cache
             data = cached_result
             
         if use_json:
-            click.echo(json.dumps(data, indent=2))
+            if full_output:
+                click.echo(json.dumps(data, indent=2))
+            else:
+                # Show only raw log messages by default
+                events = data.get('events', [])
+                messages = []
+                for event in events:
+                    message = event.get('message', '')
+                    # Try to parse JSON message, fallback to raw string if not JSON
+                    try:
+                        parsed_message = json.loads(message)
+                        messages.append(parsed_message)
+                    except (json.JSONDecodeError, TypeError):
+                        messages.append(message)
+                click.echo(json.dumps(messages))
         else:
             # Check if we have events OR statistics
             has_events = 'events' in data and data['events']

@@ -141,29 +141,7 @@ def list_investigations(ctx, status, priority, assignee, start_time, end_time, o
 
         # Output
         if output == 'json':
-            if full_output:
-                # Full output - include all fields
-                click.echo(json.dumps(investigations_display, indent=2))
-            else:
-                # Minimal output - only include fields shown in table view
-                minimal_investigations = []
-                for investigation in data:
-                    # Extract only the fields shown in the table: ID, Title, Status, Priority, Assignee, Created
-                    minimal_investigation = {
-                        'rrn': investigation.get('rrn'),
-                        'title': investigation.get('title'),
-                        'status': investigation.get('status'),
-                        'priority': investigation.get('priority'),
-                        'assignee': investigation.get('assignee'),
-                        'created_time': investigation.get('created_time')
-                    }
-                    minimal_investigations.append(minimal_investigation)
-                
-                minimal_data = {
-                    'data': minimal_investigations
-                }
-                
-                click.echo(json.dumps(minimal_data, indent=2))
+            click.echo(json.dumps(investigations_display, indent=2))
         elif output == 'simple':
             for investigation in data:
                 # Extract short ID for simple output too
