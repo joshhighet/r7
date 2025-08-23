@@ -30,6 +30,7 @@ class Rapid7Client:
             'idr_query': f"https://{self.region}.rest.logs.insight.rapid7.com",
             'asm': f"https://{self.region}.api.insight.rapid7.com/surface/graph-api/objects/table",
             'asm_apps': f"https://{self.region}.api.insight.rapid7.com/surface/apps-api",
+            'asm_profile': f"https://{self.region}.api.insight.rapid7.com/surface/auth-api/profile",
             'account': f"https://{self.region}.api.insight.rapid7.com/account/api/1",
             'appsec': f"https://{self.region}.api.insight.rapid7.com/ias/v1",
             'usage': f"https://{self.region}.rest.logs.insight.rapid7.com/usage",

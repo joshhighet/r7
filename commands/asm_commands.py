@@ -157,7 +157,7 @@ def asm_profile(ctx, output):
     use_json = should_use_json_output(output, config_manager.get('default_output'))
     
     try:
-        base_url = f"https://{client.region}.api.insight.rapid7.com/surface/auth-api/profile"
+        base_url = client.get_base_url('asm_profile')
         response = client.make_request("GET", base_url)
         
         if response.status_code != 200:
