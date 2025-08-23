@@ -2,7 +2,30 @@
 
 By default, so long as in an interactive terminal, outputs are in formatted tables. You can always get the full information by using the `--output json` flag.
 
-`--verbose`, `--region`, `--org-id` & `--api-key` are global switches. use `--help` for more information, all options should be well documented - highlight any you find are not, or where additional information would have allowed you to solve a task far quicker. Keychain native access is preferred over `--api-key`
+`--verbose`, `--region`, `--org-id` & `--api-key` are global switches. use `--help` for more information, all options should be well documented - highlight any you find are not, or where additional information would have allowed you to solve a task far quicker. Keychain native access is preferred over `--api-key` hence auth shouldn't need to be given by default. 
+
+```
+Usage: r7 [OPTIONS] COMMAND [ARGS]...
+
+  r7 - cli for logsearch, asm, web / net vulns on Rapid7
+
+Options:
+  --api-key TEXT             Rapid7 API Key (or use keychain/env)
+  --region [us|eu|ca|ap|au]  API Region
+  --org-id TEXT              Organization ID for RRN reconstruction
+  --verbose                  Enable verbose logging
+  --help                     Show this message and exit.
+
+Commands:
+  account  manage users, keys, roles, access etc
+  appsec   web app scans, findings
+  asm      surface command cypher queries, apps/sdk
+  config   manage local configuration
+  docs     search docs.rapid7.com content
+  ic       manage automation jobs, execute workflows
+  siem     search logs, manage alerts/investigations
+  vm       core vulnerability mgt, console & cloud
+  ```
 
 # SIEM
 
@@ -11,7 +34,7 @@ By default, so long as in an interactive terminal, outputs are in formatted tabl
 Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys. JSON outputs can be large, so use limits to understand the data we are working with, considering limited context windows.
 
 Use `r7 siem logs overview` to get an understanding on the logs and log sets available along with their volume. `r7 siem logs examples` shows a few working searches.
-Logs can be filtered by their values, to find out what's available - use `r7 siem logs topkeys (id)` and understand historical data for a log with `r7 siem logs usage-specific (id)`
+Before making searches, ALWAYS use `r7 siem logs topkeys (id)` to find out the event schema - understand historical data for a collection with `r7 siem logs usage-specific (id)`
 To query logs, use `r7 siem logs` with `query`, `query-logset` or `query-all` with an optional LEQL statement.
 LEQL is the DSL used by the SIEM and more information can be found on the schema with `r7 siem logs leql` and examples can be seen with `r7 siem logs examples`
 You can quickly fetch a subset of events for a log to get an understanding of the data with a LEQL query such as `limit(5)`
