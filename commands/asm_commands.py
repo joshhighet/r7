@@ -42,6 +42,78 @@ def _parse_columns_arg(columns_str):
     norm = json.dumps(cols, separators=(',', ':'), sort_keys=True)
     return cols, norm
 
+def _parse_return_clause(query):
+    """Parse RETURN clause from Cypher query to extract column names.
+    Returns a list of column header names.
+    """
+    import re
+    
+    # Find the RETURN clause (case insensitive)
+    return_match = re.search(r'\bRETURN\s+(.+?)(?:\s+(?:ORDER\s+BY|SKIP|LIMIT)|$)', query, re.IGNORECASE | re.DOTALL)
+    if not return_match:
+        return []
+    
+    return_clause = return_match.group(1).strip()
+    
+    # Split by commas (but not within parentheses)
+    columns = []
+    current = []
+    paren_depth = 0
+    bracket_depth = 0
+    
+    for char in return_clause:
+        if char == '(' and bracket_depth == 0:
+            paren_depth += 1
+            current.append(char)
+        elif char == ')' and bracket_depth == 0:
+            paren_depth -= 1
+            current.append(char)
+        elif char == '[':
+            bracket_depth += 1
+            current.append(char)
+        elif char == ']':
+            bracket_depth -= 1
+            current.append(char)
+        elif char == ',' and paren_depth == 0 and bracket_depth == 0:
+            columns.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    
+    if current:
+        columns.append(''.join(current).strip())
+    
+    # Extract column names from each column expression
+    header_names = []
+    for col in columns:
+        col = col.strip()
+        
+        # Check for alias (e.g., "count(*) as count")
+        alias_match = re.search(r'\s+[Aa][Ss]\s+(\w+)$', col)
+        if alias_match:
+            header_names.append(alias_match.group(1))
+        # Check for property access (e.g., "s.service_port")
+        elif '.' in col and not '(' in col:
+            # Extract property name after the last dot
+            parts = col.split('.')
+            header_names.append(parts[-1].strip())
+        # Check for simple identifier (e.g., "u" or "m")
+        elif re.match(r'^[a-zA-Z_]\w*$', col):
+            header_names.append(col)
+        # Check for function calls without alias (e.g., "count(m)")
+        elif '(' in col:
+            # Try to extract function name
+            func_match = re.match(r'^(\w+)\s*\(', col)
+            if func_match:
+                header_names.append(func_match.group(1))
+            else:
+                header_names.append(f"Value {len(header_names) + 1}")
+        else:
+            # Fallback to generic name
+            header_names.append(f"Value {len(header_names) + 1}")
+    
+    return header_names
+
 def should_use_json_output(output_format, config_default):
     """Determine if we should use JSON output based on pipe detection and user preference"""
     if output_format:
@@ -287,7 +359,8 @@ def cypher_group():
     pass
 
 @cypher_group.command(name='query')
-@click.argument('query')
+@click.argument('query', required=False)
+@click.option('--file', '-f', type=click.Path(exists=True), help='Read query from file (.cypher or .cql)')
 @click.option('--columns', default='[]', help='JSON array of columns (e.g., [{"alias":"m","property_name":"name"}])')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--limit', type=int, default=100, show_default=True, help='Max rows to request and display')
@@ -297,11 +370,30 @@ def cypher_group():
 @click.option('--use-primary/--no-use-primary', default=False, show_default=True, help='Use primary properties for selection')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.pass_context
-def cypher_query(ctx, query, columns, output, limit, start, depth, order, use_primary, no_cache):
+def cypher_query(ctx, query, file, columns, output, limit, start, depth, order, use_primary, no_cache):
     """Execute ASM Cypher queries"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
     try:
+        # Handle query input - either from argument or file
+        if file and query:
+            raise click.BadParameter("Cannot specify both query argument and --file option")
+        elif file:
+            try:
+                with open(file, 'r', encoding='utf-8') as f:
+                    query = f.read().strip()
+                # Remove comments and clean up multiline query
+                lines = []
+                for line in query.split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('//'):
+                        lines.append(line)
+                query = ' '.join(lines)
+            except Exception as e:
+                raise click.BadParameter(f"Failed to read query file: {e}")
+        elif not query:
+            raise click.BadParameter("Must specify either query argument or --file option")
+        
         # Parse columns flexibly
         columns_parsed, columns_norm = _parse_columns_arg(columns)
         
@@ -368,8 +460,14 @@ def cypher_query(ctx, query, columns, output, limit, start, depth, order, use_pr
                         extra = [f"Value {i+1}" for i in range(len(col_headers), inferred_len)]
                         col_headers.extend(extra)
                 else:
-                    # No columns specified; create generic headers based on inferred length
-                    col_headers = [f"Value {i+1}" for i in range(inferred_len)]
+                    # No columns specified; try to parse RETURN clause for column names
+                    parsed_headers = _parse_return_clause(query)
+                    if parsed_headers and len(parsed_headers) == inferred_len:
+                        # Use parsed headers if they match the data length
+                        col_headers = parsed_headers
+                    else:
+                        # Fallback to generic headers if parsing failed or length mismatch
+                        col_headers = [f"Value {i+1}" for i in range(inferred_len)]
 
                 table = Table(title="ASM Query Results")
                 for header in col_headers:
@@ -431,116 +529,166 @@ def cypher_docs():
 
 @cypher_group.command(name='examples')
 @click.option('--output', type=click.Choice(['table', 'json', 'plain', 'cmd']), default='plain', help='How to display the examples')
-@click.option('--test', is_flag=True, help='Execute each example and report results (requires valid API key & region)')
+@click.option('--test', is_flag=True, help='Execute each example and report results')
 @click.pass_context
 def cypher_examples(ctx, output, test):
-    """Show curated ASM Cypher examples with suggested columns. Use --test to execute them."""
-    examples = [
-        {
-            "title": "Administrative Users",
-            "query": "MATCH (u:User) WHERE u.is_administrator RETURN u LIMIT 10",
-            "columns": [{"alias": "u", "property_name": "name"}],
-            "notes": "List 10 users with administrative privileges."
-        },
-        {
-            "title": "5 Users",
-            "query": "MATCH (u:User) RETURN u LIMIT 5",
-            "columns": [{"alias": "u", "property_name": "name"}],
-            "notes": "List 5 users in the environment."
-        },
-        {
-            "title": "Ten Machines",
-            "query": "MATCH (m:Machine) RETURN m LIMIT 10",
-            "columns": [{"alias": "m", "property_name": "name"}],
-            "notes": "List 10 machines in the environment."
-        },
-        {
-            "title": "Machine Count",
-            "query": "MATCH (m:Machine) RETURN count(m)",
-            "columns": [],
-            "notes": "Count total number of machines."
-        },
-        {
-            "title": "User Count",
-            "query": "MATCH (u:User) RETURN count(u)",
-            "columns": [],
-            "notes": "Count total number of users."
-        },
-        {
-            "title": "BIMI Eligible Domains",
-            "query": "MATCH (dmarc:CloudflareDnsRecord) WHERE dmarc.type = 'TXT' AND dmarc.name ISTARTS WITH '_dmarc.' AND (dmarc.content ICONTAINS 'p=quarantine' OR dmarc.content ICONTAINS 'p=reject') WITH dmarc, REPLACE(dmarc.name, '_dmarc.', '') AS domain OPTIONAL MATCH (spf:CloudflareDnsRecord) WHERE spf.name = domain AND spf.type = 'TXT' AND spf.content ISTARTS WITH 'v=spf1' AND spf.content ICONTAINS '-all' RETURN domain, CASE WHEN dmarc.content ICONTAINS 'p=reject' THEN 'reject' WHEN dmarc.content ICONTAINS 'p=quarantine' THEN 'quarantine' END AS dmarc_policy, CASE WHEN spf IS NOT NULL THEN 'Yes' ELSE 'No' END AS strict_spf, CASE WHEN spf IS NOT NULL AND dmarc.content ICONTAINS 'p=reject' THEN 'Fully Eligible' WHEN spf IS NOT NULL AND dmarc.content ICONTAINS 'p=quarantine' THEN 'Eligible' ELSE 'Partial (no SPF -all)' END AS bimi_eligibility ORDER BY bimi_eligibility DESC, domain ASC",
-            "columns": [],
-            "notes": "Find domains eligible for BIMI with strict DMARC (quarantine/reject) and SPF hard fail (-all)."
-        },
-        {
-            "title": "Unscanned Workstations and Servers",
-            "query": "MATCH (m:Machine) WHERE NOT 'Vulnerability Scanning' IN m.mitigations AND (m.asset_class = 'Workstation' OR m.asset_class = 'Server') RETURN m",
-            "columns": [],
-            "notes": "Find workstations and servers without vulnerability scanning mitigation."
-        }
-    ]
-
-    if not test:
-        if output == 'json':
-            click.echo(json.dumps(examples, indent=2))
-            return
-        if output == 'plain':
-            for i, e in enumerate(examples, 1):
-                cmd = f"r7 asm cypher query \"{e['query']}\" --columns '{json.dumps(e['columns'])}'"
-                click.echo(f"{i}. {e['title']}")
-                click.echo(f"   {e['notes']}")
-                click.echo(f"")
-                click.echo(f"   {cmd}")
-                click.echo()
-            return
-        if output == 'cmd':
-            for e in examples:
-                cmd = f"r7 asm cypher query \"{e['query']}\" --columns '{json.dumps(e['columns'])}'"
-                click.echo(cmd)
-            return
-        table = Table(title="ASM Cypher Examples")
-        table.add_column("Title", style="cyan")
-        table.add_column("Query", style="white")
-        table.add_column("Columns (JSON)", style="magenta")
-        table.add_column("Notes", style="yellow")
-        for e in examples:
-            table.add_row(e['title'], e['query'], json.dumps(e['columns']), e['notes'])
-        console.print(table)
+    """List and test Cypher query examples from files"""
+    from pathlib import Path
+    
+    # Load examples from .cypher files
+    examples_dir = Path(__file__).parent.parent / 'examples' / 'asm'
+    
+    if not examples_dir.exists():
+        click.echo("❌ Examples directory not found: examples/asm/", err=True)
         return
-
-    client, _ = get_client_and_config(ctx)
-    base_url = client.get_base_url('asm')
-    url = f"{base_url}?format=json"
-    results = []
-    for e in examples:
-        body = {"columns": e["columns"], "cypher": e["query"]}
+    
+    examples = []
+    
+    # Read all .cypher files in order
+    for cypher_file in sorted(examples_dir.glob('*.cypher')):
         try:
-            response = client.make_request("POST", url, data=body)
-            if response.status_code != 200:
-                results.append({"title": e['title'], "items": 0, "status": f"HTTP {response.status_code}", "notes": e['notes']})
-                continue
-            data = response.json()
-            items = len(data.get('items', [])) if isinstance(data, dict) else 0
-            results.append({"title": e['title'], "items": items, "status": "ok" if items > 0 else "no items", "notes": e['notes']})
-        except Exception as ex:
-            results.append({"title": e['title'], "items": 0, "status": f"error: {ex}", "notes": e['notes']})
-
+            with open(cypher_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Parse the file to extract metadata and query
+            lines = content.strip().split('\n')
+            title = ""
+            description = ""
+            columns = []
+            query_lines = []
+            
+            comment_count = 0
+            for line in lines:
+                if line.startswith('//'):
+                    comment = line[2:].strip()
+                    if comment:
+                        if not title:
+                            title = comment
+                            comment_count += 1
+                        elif comment_count == 1:
+                            description = comment
+                            comment_count += 1
+                        elif comment.startswith('Columns:'):
+                            # Extract columns from comment
+                            cols_str = comment[8:].strip()
+                            if cols_str and cols_str != '[]':
+                                try:
+                                    columns = json.loads(cols_str)
+                                except:
+                                    columns = []
+                elif line.strip() and not line.startswith('//'):
+                    query_lines.append(line.strip())
+            
+            # Join query lines
+            query = ' '.join(query_lines)
+            
+            if query:
+                examples.append({
+                    "title": title or cypher_file.stem.replace('_', ' ').title(),
+                    "description": description,
+                    "query": query,
+                    "columns": columns,
+                    "filename": cypher_file.name
+                })
+        except Exception as e:
+            click.echo(f"⚠️  Failed to read {cypher_file.name}: {e}", err=True)
+    
+    if not examples:
+        click.echo("No examples found", err=True)
+        return
+    
+    # Test mode
+    if test:
+        client, _ = get_client_and_config(ctx)
+        base_url = client.get_base_url('asm')
+        
+        results = []
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+        ) as progress:
+            task = progress.add_task("Testing examples...", total=len(examples))
+            
+            for e in examples:
+                url = f"{base_url}?format=json&limit=10"
+                body = {"columns": e["columns"], "cypher": e["query"]}
+                try:
+                    response = client.make_request("POST", url, data=body)
+                    if response.status_code != 200:
+                        results.append({
+                            "title": e['title'], 
+                            "status": f"HTTP {response.status_code}",
+                            "filename": e['filename']
+                        })
+                    else:
+                        data = response.json()
+                        items = len(data.get('items', [])) if isinstance(data, dict) else 0
+                        results.append({
+                            "title": e['title'], 
+                            "status": "✓" if items > 0 else "empty",
+                            "filename": e['filename']
+                        })
+                except Exception as ex:
+                    results.append({
+                        "title": e['title'], 
+                        "status": f"error: {ex}",
+                        "filename": e['filename']
+                    })
+                progress.advance(task)
+        
+        # Display test results
+        if output == 'json':
+            click.echo(json.dumps(results, indent=2))
+        else:
+            table = Table(title="Cypher Examples Test Results")
+            table.add_column("File", style="cyan")
+            table.add_column("Title", style="white")
+            table.add_column("Status", style="green")
+            
+            for r in results:
+                status_style = "green" if r['status'] == "✓" else "yellow" if r['status'] == "empty" else "red"
+                table.add_row(r['filename'], r['title'], f"[{status_style}]{r['status']}[/{status_style}]")
+            console.print(table)
+        return
+    
+    # Display mode
     if output == 'json':
-        click.echo(json.dumps(results, indent=2))
-        return
-    if output == 'plain':
-        for r in results:
-            click.echo(f"- {r['title']}: {r['status']} (items={r['items']})\n  Notes: {r['notes']}")
-        return
-    table = Table(title="ASM Cypher Examples - Test Results")
-    table.add_column("Title", style="cyan")
-    table.add_column("Items", style="green")
-    table.add_column("Status", style="yellow")
-    table.add_column("Notes", style="white")
-    for r in results:
-        table.add_row(r['title'], str(r['items']), r['status'], r['notes'])
-    console.print(table)
-# --- End new cypher examples support ---
+        click.echo(json.dumps(examples, indent=2))
+    elif output == 'cmd':
+        for e in examples:
+            if e['columns']:
+                click.echo(f"r7 asm cypher query -f examples/asm/{e['filename']} --columns '{json.dumps(e['columns'])}'")
+            else:
+                click.echo(f"r7 asm cypher query -f examples/asm/{e['filename']}")
+    elif output == 'table':
+        table = Table(title="ASM Cypher Examples")
+        table.add_column("File", style="cyan")
+        table.add_column("Title", style="white")
+        table.add_column("Description", style="yellow")
+        
+        for e in examples:
+            table.add_row(e['filename'], e['title'], e['description'] or "")
+        console.print(table)
+    else:  # plain
+        for i, e in enumerate(examples, 1):
+            click.echo(f"{i}. {e['title']}")
+            if e['description']:
+                click.echo(f"   {e['description']}")
+            click.echo("")
+            
+            # Show direct query command if short enough, otherwise use file reference
+            if len(e['query']) < 150:  # Short queries can be shown inline
+                if e['columns']:
+                    click.echo(f"   r7 asm cypher query \"{e['query']}\" --columns '{json.dumps(e['columns'])}'")
+                else:
+                    click.echo(f"   r7 asm cypher query \"{e['query']}\"")
+            else:  # Long queries use file reference
+                if e['columns']:
+                    click.echo(f"   r7 asm cypher query -f examples/asm/{e['filename']} --columns '{json.dumps(e['columns'])}'")
+                else:
+                    click.echo(f"   r7 asm cypher query -f examples/asm/{e['filename']}")
+            click.echo()
 
 def _run_surcom_command(ctx, command, args=None):
     """Helper to run surcom SDK commands"""
