@@ -40,12 +40,11 @@ LEQL is the DSL used by the SIEM and more information can be found on the schema
 You can quickly fetch a subset of events for a log to get an understanding of the data with a LEQL query such as `limit(5)`
 By default searches will return only a subset of common fields - you can increase the number of fields available with `--smart-columns-max (int)` or view all with `--no-smart-columns`
 
-To query logs in a specific log set, you can use the `query-logset` command. For example, looking for authentication events; `r7 siem logs query-logset "Asset Authentication" "where(source_asset contains insight-vm AND service contains sudo) limit(10)" --time-range "Last 7 days"` - or against a direct log for for process events from a specific user; `r7 siem logs query "Process Start Events" "where(hostname=windows-desktop AND process.username=josh) limit(10)" --time-range "Last 7 days"` - If I was intereted in a particular user's access to various systems, I would look at `r7 siem logs query-logset "Asset Authentication" "where(source_local_account=josh) groupby(source_asset)" --time-range "Last 7 days"`
+To query logs in a specific log set, you can use the `query-logset` command. For example, looking for authentication events; `r7 siem logs query-logset "Asset Authentication" "where(source_asset contains insight-vm AND service contains sudo) limit(10)" --time-range "Last 7 days"` - or against a direct log for for process events from a specific user; `r7 siem logs query "Process Start Events" "where(hostname=windows-desktop AND process.username=josh) limit(10)" --time-range "Last 7 days"` - If I was intereted in a particular user's access to various systems, I would look at `r7 siem logs query-logset "Asset Authentication" "where(source_local_account=josh) groupby(source_asset)" --time-range "Last 7 days"`.
 
 Alerts are triggered based on specific conditions in log data and investigations are notable roll-ups of related alerts and events. You can list unique alerts with `r7 siem alert list` and retrieve specifics with `r7 siem alert get` on an ID or RRN
 
-You can list investigations with `r7 siem investigation list` and retrieve specifics with `r7 siem investigation get` on an ID or RRN. To view alerts that have made up an investigation, use `r7 siem investigation alerts` on the ID.
-Use `r7 siem investigation` or `alert` with `--help` for more, such as making comments, assigning cases, creating etc
+You can list investigations with `r7 siem investigation list` and retrieve specifics with `r7 siem investigation get` on an ID or RRN. To view alerts that have made up an investigation, use `r7 siem investigation alerts` on the ID. Use `r7 siem investigation` or `alert` with `--help` for more, such as making comments, assigning cases, creating etc
 
 # ASM
 
