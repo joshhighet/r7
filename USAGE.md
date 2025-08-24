@@ -29,7 +29,7 @@ Commands:
 
 # SIEM
 
-`logs` is how we interface with the Rapid7 SIEM. This includes searching logs, managing alerts and investigations. There are several helpful notes for when making queries below, however you should always use 'topkeys' when investigating data you haven't worked with before to know which fields are available. You can view a single full log with nothign else like so when required ``r7 siem logs query sublime-security 'limit(1)' --output json | jq -r '.events[0].message'``
+`logs` is how we interface with the Rapid7 SIEM. This includes searching logs, managing alerts and investigations. There are several helpful notes for when making queries below, however you should always use 'topkeys' when investigating data you haven't worked with before to know which fields are available. You can view a single full log with nothign else like so when required `r7 siem logs query sublime-security 'limit(1)' --output json`
 
 Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys. JSON outputs can be large, so use limits to understand the data we are working with, considering limited context windows.
 
