@@ -21,6 +21,8 @@ This guide provides a concise reference for constructing LEQL queries in Rapid7 
 | OR      | expr1 OR expr2  | Matches one or both. |
 | NOT     | expr1 NOT expr2 | Matches expr1 but not expr2. |
 
+Remember LEQL boolean expressions must wrap the entire expression in parentheses when mixing AND/OR operators: use `where((A OR B) AND C)` not `where(A OR B) AND C)`.
+
 ### Comparison Operators (for KVP/Regex; Support Numbers with Units)
 | Operator | Example | Description |
 |----------|---------|-------------|
