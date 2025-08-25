@@ -321,7 +321,7 @@ class Rapid7Client:
         return logset_id
 
 
-    def query_logset(self, logset_name_or_id, query, time_range, max_result_pages=None):
+    def query_logset(self, logset_name_or_id, query, query_params, max_result_pages=None):
         """Query a logset using the /query/logsets/{id} endpoint"""
         # Resolve logset ID if name provided
         if not self.is_uuid(logset_name_or_id):
@@ -331,13 +331,26 @@ class Rapid7Client:
         
         base_url = self.get_base_url('idr_query')
         from urllib.parse import quote
-        encoded_query = quote(query)
-        encoded_time = quote(time_range)
-        url = f"{base_url}/query/logsets/{logset_id}?time_range={encoded_time}&query={encoded_query}"
+        
+        # Build URL with appropriate time parameters
+        url = f"{base_url}/query/logsets/{logset_id}?"
+        url_params = []
+        if query:
+            encoded_query = quote(query)
+            url_params.append(f"query={encoded_query}")
+        
+        if query_params.get('time_range'):
+            encoded_time = quote(query_params['time_range'])
+            url_params.append(f"time_range={encoded_time}")
+        elif query_params.get('from') and query_params.get('to'):
+            url_params.append(f"from={query_params['from']}")
+            url_params.append(f"to={query_params['to']}")
+        
+        url += "&".join(url_params)
         
         return self.poll_query(url, show_progress=True, max_result_pages=max_result_pages)
 
-    def query_all_logsets(self, query, time_range, max_result_pages=None):
+    def query_all_logsets(self, query, query_params, max_result_pages=None):
         """Query all logsets using the /query/logsets endpoint with multiple logset_name parameters"""
         import logging
         logger = logging.getLogger(__name__)
@@ -365,15 +378,20 @@ class Rapid7Client:
         
         # Build URL with multiple logset_name parameters
         from urllib.parse import quote, urlencode
-        encoded_query = quote(query)
-        encoded_time = quote(time_range)
         query_base_url = self.get_base_url('idr_query')
         
         # Create query parameters - multiple logset_name params
         params = []
         for logset_name in sorted(logset_names):  # Sort for consistent URLs
             params.append(('logset_name', logset_name))
-        params.append(('time_range', time_range))
+        
+        # Add time range parameters
+        if query_params.get('time_range'):
+            params.append(('time_range', query_params['time_range']))
+        elif query_params.get('from') and query_params.get('to'):
+            params.append(('from', str(query_params['from'])))
+            params.append(('to', str(query_params['to'])))
+        
         if query:  # Only add query param if not empty
             params.append(('query', query))
         
@@ -382,7 +400,7 @@ class Rapid7Client:
         
         logger.info(f"query_all_logsets() - Found {len(logset_names)} logsets: {sorted(logset_names)}")
         logger.info(f"query_all_logsets() - Constructed URL: {url}")
-        logger.info(f"query_all_logsets() - Original query: '{query}', time_range: '{time_range}'")
+        logger.info(f"query_all_logsets() - Query params: {query_params}")
         
         result = self.poll_query(url, show_progress=True, max_result_pages=max_result_pages)
         

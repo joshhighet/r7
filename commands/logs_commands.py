@@ -16,6 +16,139 @@ from utils.exceptions import *
 
 console = Console()
 
+def process_time_range_params(time_range=None, from_time=None, to_time=None, from_date=None, to_date=None):
+    """
+    Process time range parameters and return appropriate query parameters.
+    
+    Priority:
+    1. If time_range is specified, use it (relative time)
+    2. If from_time/to_time are specified, use them (absolute timestamps)
+    3. If from_date/to_date are specified, convert to timestamps
+    4. Default to "Last 30 days"
+    
+    Returns dict with either:
+    - {'time_range': 'last 5 hours'} for relative time
+    - {'from': 1450557004000, 'to': 1460557604000} for absolute time
+    """
+    # Check for conflicting parameters
+    params_count = sum([
+        bool(time_range),
+        bool(from_time and to_time),
+        bool(from_date and to_date)
+    ])
+    
+    if params_count > 1:
+        raise click.BadParameter(
+            "Cannot use multiple time range methods. Choose either:\n"
+            "  --time-range for relative time (e.g., 'last 5 hours')\n"
+            "  --from-time/--to-time for timestamps\n"
+            "  --from-date/--to-date for dates"
+        )
+    
+    # Option 1: Relative time range
+    if time_range:
+        # Validate format matches API expectations
+        time_range_lower = time_range.lower()
+        valid_patterns = [
+            'yesterday', 'today',
+            r'last\s+\d+\s+(min|mins|minute|minutes|hr|hrs|hour|hours|day|days|week|weeks|month|months|year|years)'
+        ]
+        
+        is_valid = False
+        if time_range_lower in ['yesterday', 'today']:
+            is_valid = True
+        else:
+            import re
+            for pattern in valid_patterns[2:]:  # Skip 'yesterday' and 'today'
+                if re.match(pattern, time_range_lower):
+                    is_valid = True
+                    break
+        
+        if not is_valid:
+            raise click.BadParameter(
+                f"Invalid time range format: '{time_range}'\n"
+                "Valid formats:\n"
+                "  - 'yesterday' or 'today'\n"
+                "  - 'last X timeunit' where X is a number and timeunit is:\n"
+                "    min(s), minute(s), hr(s), hour(s), day(s), week(s), month(s), year(s)\n"
+                "Examples: 'last 5 hours', 'last 7 days', 'last 2 weeks'"
+            )
+        
+        return {'time_range': time_range}
+    
+    # Option 2: Absolute timestamps
+    if from_time is not None and to_time is not None:
+        if from_time >= to_time:
+            raise click.BadParameter("from-time must be before to-time")
+        return {'from': from_time, 'to': to_time}
+    elif from_time is not None or to_time is not None:
+        raise click.BadParameter("Both --from-time and --to-time must be specified together")
+    
+    # Option 3: Date strings
+    if from_date and to_date:
+        try:
+            # Parse dates - support both date and datetime formats
+            from_dt = None
+            to_dt = None
+            
+            # Try different date formats
+            date_formats = [
+                '%Y-%m-%d %H:%M:%S',
+                '%Y-%m-%d %H:%M',
+                '%Y-%m-%d',
+                '%Y/%m/%d %H:%M:%S',
+                '%Y/%m/%d %H:%M',
+                '%Y/%m/%d'
+            ]
+            
+            for fmt in date_formats:
+                if from_dt is None:
+                    try:
+                        from_dt = datetime.strptime(from_date, fmt)
+                    except ValueError:
+                        continue
+                        
+            for fmt in date_formats:
+                if to_dt is None:
+                    try:
+                        to_dt = datetime.strptime(to_date, fmt)
+                    except ValueError:
+                        continue
+            
+            if from_dt is None:
+                raise ValueError(f"Could not parse from-date: {from_date}")
+            if to_dt is None:
+                raise ValueError(f"Could not parse to-date: {to_date}")
+            
+            # If only date was provided (no time), set appropriate times
+            if ' ' not in from_date:  # No time component
+                from_dt = from_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            if ' ' not in to_date:  # No time component
+                to_dt = to_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
+            if from_dt >= to_dt:
+                raise click.BadParameter("from-date must be before to-date")
+            
+            # Convert to millisecond timestamps
+            from_ts = int(from_dt.timestamp() * 1000)
+            to_ts = int(to_dt.timestamp() * 1000)
+            
+            return {'from': from_ts, 'to': to_ts}
+            
+        except ValueError as e:
+            raise click.BadParameter(
+                f"Invalid date format: {e}\n"
+                "Supported formats:\n"
+                "  - YYYY-MM-DD (e.g., 2024-01-15)\n"
+                "  - YYYY-MM-DD HH:MM:SS (e.g., 2024-01-15 14:30:00)\n"
+                "  - YYYY-MM-DD HH:MM (e.g., 2024-01-15 14:30)"
+            )
+    elif from_date or to_date:
+        raise click.BadParameter("Both --from-date and --to-date must be specified together")
+    
+    # Default fallback
+    return {'time_range': 'Last 30 days'}
+
 def _flatten_group_statistics(groups_list):
     """
     Flatten the statistics.groups structure from LEQL into rows for table display.
@@ -448,7 +581,11 @@ def logs_leql():
 @siem_logs_group.command(name='query')
 @click.argument('log_name_or_id')
 @click.argument('query', required=False, default='')
-@click.option('--time-range', default='Last 30 days', help='Time range')
+@click.option('--time-range', help='Relative time range (e.g., "last 5 hours", "yesterday", "last 7 days")')
+@click.option('--from-time', type=int, help='Start time as UNIX timestamp in milliseconds')
+@click.option('--to-time', type=int, help='End time as UNIX timestamp in milliseconds')
+@click.option('--from-date', help='Start date/time (e.g., "2024-01-15", "2024-01-15 14:30:00")')
+@click.option('--to-date', help='End date/time (e.g., "2024-01-20", "2024-01-20 18:45:00")')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
@@ -457,10 +594,19 @@ def logs_leql():
 @click.option('--smart-columns-max', type=int, help='Maximum number of smart columns to display')
 @click.option('--max-chars', type=int, help='Maximum characters to display per log entry (overrides global config)')
 @click.pass_context
-def query_log(ctx, log_name_or_id, query, time_range, output, full_output, max_result_pages, no_cache, no_smart_columns, smart_columns_max, max_chars):
-    """Query InsightIDR log with LEQL"""
+def query_log(ctx, log_name_or_id, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache, no_smart_columns, smart_columns_max, max_chars):
+    """Query InsightIDR log with LEQL
+    
+    Time range can be specified using:
+    - Relative: --time-range "last 5 hours" or "yesterday" or "last 7 days"
+    - Absolute timestamps: --from-time 1450557004000 --to-time 1460557604000
+    - Absolute dates: --from-date "2024-01-15" --to-date "2024-01-20"
+    """
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
+    
+    # Process time range parameters
+    query_params = process_time_range_params(time_range, from_time, to_time, from_date, to_date)
     
     # Smart pagination
     max_result_pages = handle_smart_pagination(query, max_result_pages, config_manager, use_json)
@@ -477,7 +623,13 @@ def query_log(ctx, log_name_or_id, query, time_range, output, full_output, max_r
             log_id = client.get_log_id_by_name(log_name_or_id)
         else:
             log_id = log_name_or_id
-        cache_key = f"{log_id}_{query}_{time_range}_{max_result_pages}"
+        
+        # Create cache key based on actual parameters used
+        cache_key_parts = [log_id, query]
+        cache_key_parts.extend([str(v) for v in query_params.values() if v is not None])
+        cache_key_parts.append(str(max_result_pages))
+        cache_key = "_".join(cache_key_parts)
+        
         cached_result = None
         if client.cache_manager and not no_cache:
             cached_result = client.cache_manager.get('leql_query', cache_key)
@@ -487,8 +639,24 @@ def query_log(ctx, log_name_or_id, query, time_range, output, full_output, max_r
         if not cached_result:
             query_base_url = client.get_base_url('idr_query')
             encoded_query = quote(query)
-            encoded_time = quote(time_range)
-            url = f"{query_base_url}/query/logs/{log_id}?time_range={encoded_time}&query={encoded_query}"
+            
+            # Build URL with appropriate time parameters
+            url = f"{query_base_url}/query/logs/{log_id}?"
+            url_params = []
+            if query:
+                url_params.append(f"query={encoded_query}")
+            
+            if query_params.get('time_range'):
+                encoded_time = quote(query_params['time_range'])
+                url_params.append(f"time_range={encoded_time}")
+            elif query_params.get('from') and query_params.get('to'):
+                url_params.append(f"from={query_params['from']}")
+                url_params.append(f"to={query_params['to']}")
+            else:
+                # Default fallback (should not reach here)
+                url_params.append("time_range=Last%2030%20days")
+            
+            url += "&".join(url_params)
             data = client.poll_query(url, show_progress=not use_json, max_result_pages=max_result_pages, query_timeout=config_manager.get('query_timeout'))
             if client.cache_manager and not no_cache:
                 client.cache_manager.set('leql_query', cache_key, data)
@@ -638,22 +806,34 @@ def query_log(ctx, log_name_or_id, query, time_range, output, full_output, max_r
 @siem_logs_group.command(name='query-logset')
 @click.argument('logset_name_or_id')
 @click.argument('query', required=False, default='')
-@click.option('--time-range', default='Last 30 days', help='Time range')
+@click.option('--time-range', help='Relative time range (e.g., "last 5 hours", "yesterday", "last 7 days")')
+@click.option('--from-time', type=int, help='Start time as UNIX timestamp in milliseconds')
+@click.option('--to-time', type=int, help='End time as UNIX timestamp in milliseconds')
+@click.option('--from-date', help='Start date/time (e.g., "2024-01-15", "2024-01-15 14:30:00")')
+@click.option('--to-date', help='End date/time (e.g., "2024-01-20", "2024-01-20 18:45:00")')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.pass_context
-def query_logset(ctx, logset_name_or_id, query, time_range, output, full_output, max_result_pages, no_cache):
+def query_logset(ctx, logset_name_or_id, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache):
     """Query an entire logset with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
+    
+    # Process time range parameters
+    query_params = process_time_range_params(time_range, from_time, to_time, from_date, to_date)
     
     # Smart pagination
     max_result_pages = handle_smart_pagination(query, max_result_pages, config_manager, use_json)
     
     try:
-        cache_key = f"logset_{logset_name_or_id}_{query}_{time_range}_{max_result_pages}"
+        # Create cache key based on actual parameters used
+        cache_key_parts = ["logset", logset_name_or_id, query]
+        cache_key_parts.extend([str(v) for v in query_params.values() if v is not None])
+        cache_key_parts.append(str(max_result_pages))
+        cache_key = "_".join(cache_key_parts)
+        
         cached_result = None
         if client.cache_manager and not no_cache:
             cached_result = client.cache_manager.get('leql_query', cache_key)
@@ -662,7 +842,7 @@ def query_logset(ctx, logset_name_or_id, query, time_range, output, full_output,
                     console.print("📋 Using cached result", style="dim")
         
         if not cached_result:
-            data = client.query_logset(logset_name_or_id, query, time_range, max_result_pages)
+            data = client.query_logset(logset_name_or_id, query, query_params, max_result_pages)
             if client.cache_manager and not no_cache:
                 client.cache_manager.set('leql_query', cache_key, data)
         else:
@@ -722,16 +902,23 @@ def query_logset(ctx, logset_name_or_id, query, time_range, output, full_output,
 
 @siem_logs_group.command(name='query-all')
 @click.argument('query', required=False, default='')
-@click.option('--time-range', default='Last 30 days', help='Time range')
+@click.option('--time-range', help='Relative time range (e.g., "last 5 hours", "yesterday", "last 7 days")')
+@click.option('--from-time', type=int, help='Start time as UNIX timestamp in milliseconds')
+@click.option('--to-time', type=int, help='End time as UNIX timestamp in milliseconds')
+@click.option('--from-date', help='Start date/time (e.g., "2024-01-15", "2024-01-15 14:30:00")')
+@click.option('--to-date', help='End date/time (e.g., "2024-01-20", "2024-01-20 18:45:00")')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
 @click.pass_context
-def query_all_logsets(ctx, query, time_range, output, full_output, max_result_pages, no_cache):
+def query_all_logsets(ctx, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache):
     """Query all logsets at once with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
+    
+    # Process time range parameters
+    query_params = process_time_range_params(time_range, from_time, to_time, from_date, to_date)
     
     # Smart pagination
     max_result_pages = handle_smart_pagination(query, max_result_pages, config_manager, use_json)
@@ -756,7 +943,12 @@ def query_all_logsets(ctx, query, time_range, output, full_output, max_result_pa
             except Exception:
                 pass  # Don't fail the query if we can't get logset info
         
-        cache_key = f"all_logsets_{query}_{time_range}_{max_result_pages}"
+        # Create cache key based on actual parameters used
+        cache_key_parts = ["all_logsets", query]
+        cache_key_parts.extend([str(v) for v in query_params.values() if v is not None])
+        cache_key_parts.append(str(max_result_pages))
+        cache_key = "_".join(cache_key_parts)
+        
         cached_result = None
         if client.cache_manager and not no_cache:
             cached_result = client.cache_manager.get('leql_query', cache_key)
@@ -765,7 +957,7 @@ def query_all_logsets(ctx, query, time_range, output, full_output, max_result_pa
                     console.print("📋 Using cached result", style="dim")
         
         if not cached_result:
-            data = client.query_all_logsets(query, time_range, max_result_pages)
+            data = client.query_all_logsets(query, query_params, max_result_pages)
             if client.cache_manager and not no_cache:
                 client.cache_manager.set('leql_query', cache_key, data)
         else:
