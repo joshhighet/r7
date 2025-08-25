@@ -1,8 +1,8 @@
 # General
 
-By default, so long as in an interactive terminal, outputs are in formatted tables. You can always get the full information by using the `--output json` flag.
+By default, so long as in an interactive terminal, outputs are in formatted tables. You can always get the full information by using the `--output json` flag. Piping commands, this will trigger an non-interactive output - for example, `r7 account orgs list --output json | jq` only needs to be `r7 account orgs list | jq ` - Certain commands will require the switch `--full-output` - It should rarely be required.
 
-`--verbose`, `--region`, `--org-id` & `--api-key` are global switches. use `--help` for more information, all options should be well documented - highlight any you find are not, or where additional information would have allowed you to solve a task far quicker. Keychain native access is preferred over `--api-key` hence auth shouldn't need to be given by default. 
+`--verbose`, `--region`, `--org-id` & `--api-key` are global switches. use `--help` for more information, all options should be well documented - highlight any you find are not, or where additional information would have allowed you to solve a task far quicker. Keychain native access is preferred over `--api-key` hence auth shouldn't need to be given by default.
 
 ```
 Usage: r7 [OPTIONS] COMMAND [ARGS]...
@@ -31,7 +31,7 @@ Commands:
 
 `logs` is how we interface with the Rapid7 SIEM. This includes searching logs, managing alerts and investigations. There are several helpful notes for when making queries below, however you should always use 'topkeys' when investigating data you haven't worked with before to know which fields are available. You can view a single full log with nothign else like so when required `r7 siem logs query sublime-security 'limit(1)' --output json`
 
-Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys. JSON outputs can be large, so use limits to understand the data we are working with, considering limited context windows.
+Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys.
 
 Use `r7 siem logs overview` to get an understanding on the logs and log sets available along with their volume. `r7 siem logs examples` shows a few working searches.
 Before making searches, ALWAYS use `r7 siem logs topkeys (id)` to find out the event schema - understand historical data for a collection with `r7 siem logs usage-specific (id)`
@@ -41,6 +41,8 @@ You can quickly fetch a subset of events for a log to get an understanding of th
 By default searches will return only a subset of common fields - you can increase the number of fields available with `--smart-columns-max (int)` or view all with `--no-smart-columns`
 
 To query logs in a specific log set, you can use the `query-logset` command. For example, looking for authentication events; `r7 siem logs query-logset "Asset Authentication" "where(source_asset contains insight-vm AND service contains sudo) limit(10)" --time-range "Last 7 days"` - or against a direct log for for process events from a specific user; `r7 siem logs query "Process Start Events" "where(hostname=windows-desktop AND process.username=josh) limit(10)" --time-range "Last 7 days"` - If I was intereted in a particular user's access to various systems, I would look at `r7 siem logs query-logset "Asset Authentication" "where(source_local_account=josh) groupby(source_asset)" --time-range "Last 7 days"`.
+
+JSON outputs can be large, so use limits to understand the data we are working with, considering limited context windows - the LEQL `limit` should be used when searching raw logs, and 
 
 Alerts are triggered based on specific conditions in log data and investigations are notable roll-ups of related alerts and events. You can list unique alerts with `r7 siem alert list` and retrieve specifics with `r7 siem alert get` on an ID or RRN
 
