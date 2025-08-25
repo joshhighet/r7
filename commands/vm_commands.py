@@ -14,6 +14,14 @@ from api.insightvm_cloud import InsightVMCloudClient
 
 console = Console()
 
+def determine_output_format(output, config):
+    """Determine output format with pipe detection"""
+    if output:
+        return output
+    elif not sys.stdout.isatty():
+        return 'json'
+    else:
+        return config.get('default_output', 'table')
 
 def _get_vm_console_client(config: ConfigManager) -> InsightVMConsoleClient:
     base_url = config.get('vm_console_url')
@@ -97,7 +105,8 @@ def list_sites(page, size, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.list_sites(page=page, size=size)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         # table
@@ -137,7 +146,8 @@ def get_site(site_id, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.get_site(site_id)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         # table
@@ -192,7 +202,8 @@ def list_assets(page, size, site_id, hostname, output):
             data = client.list_site_assets(site_id, page=page, size=size)
         else:
             data = client.list_assets(page=page, size=size)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         resources = data.get('resources', []) if isinstance(data, dict) else []
@@ -279,7 +290,8 @@ def get_asset(asset_id, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.get_asset(asset_id)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         table = Table(title=f"Asset {data.get('id', asset_id)}")
@@ -370,7 +382,8 @@ def delete_asset(asset_id, confirm, output):
         # Perform the deletion
         result = client.delete_asset(asset_id)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             console.print(f"[green]✅ Successfully deleted asset {asset_id}[/green]")
@@ -398,7 +411,8 @@ def list_vulns(page, size, severity, cve, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.list_vulnerabilities(page=page, size=size)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         resources = data.get('resources', []) if isinstance(data, dict) else []
@@ -442,7 +456,8 @@ def get_vuln(vuln_id, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.get_vulnerability(vuln_id)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         table = Table(title=f"Vulnerability {data.get('id', vuln_id)}")
@@ -498,7 +513,8 @@ def list_asset_findings(asset_id, page, size, status, id_contains, port, protoco
         config.validate()
         client = _get_vm_console_client(config)
         data = client.list_asset_vulnerabilities(asset_id, page=page, size=size)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         resources = data.get('resources', []) if isinstance(data, dict) else []
@@ -638,7 +654,8 @@ def list_scans(page, size, site_id, output):
             data = client.list_site_scans(site_id, page=page, size=size)
         else:
             data = client.list_scans(page=page, size=size)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         resources = data.get('resources', []) if isinstance(data, dict) else []
@@ -672,7 +689,8 @@ def get_scan(scan_id, output):
         config.validate()
         client = _get_vm_console_client(config)
         data = client.get_scan(scan_id)
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         table = Table(title=f"Scan {data.get('id', scan_id)}")
@@ -751,7 +769,8 @@ def start_scan(site_id, name, template_id, engine_id, hosts, asset_group_ids, ov
             override_blackout=override_blackout
         )
         
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         
@@ -782,7 +801,8 @@ def stop_scan(scan_id, output):
         
         data = client.update_scan_status(scan_id, 'stop')
         
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         
@@ -804,7 +824,8 @@ def pause_scan(scan_id, output):
         
         data = client.update_scan_status(scan_id, 'pause')
         
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         
@@ -826,7 +847,8 @@ def resume_scan(scan_id, output):
         
         data = client.update_scan_status(scan_id, 'resume')
         
-        if output == 'json':
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
         

@@ -1,3 +1,4 @@
+import sys
 import click
 import json
 from datetime import datetime
@@ -12,6 +13,15 @@ from api.client import Rapid7Client
 from utils.exceptions import AuthenticationError
 
 console = Console()
+
+def determine_output_format(output, config):
+    """Determine output format with pipe detection"""
+    if output:
+        return output
+    elif not sys.stdout.isatty():
+        return 'json'
+    else:
+        return config.get('default_output', 'simple')
 
 # ============================================================================
 # Helper Functions
@@ -220,7 +230,7 @@ appsec_group.add_command(scan_group)
 # ============================================================================
 
 @app_group.command('list')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def list_apps(ctx, output):
@@ -229,9 +239,12 @@ def list_apps(ctx, output):
         client, cache_manager = get_client(ctx)
         apps = client.list_apps()
         
+        config_manager = ConfigManager()
+        use_format = determine_output_format(output, config_manager)
+        
         # For table output, also fetch latest scan info
         app_scan_map = {}
-        if output == 'table':
+        if use_format == 'table':
             with Progress(SpinnerColumn(), TextColumn("Fetching latest scans..."), TimeElapsedColumn()) as progress:
                 progress.add_task("Fetching", total=None)
                 all_scans = client.list_scans()
@@ -249,9 +262,9 @@ def list_apps(ctx, output):
                             }
         
         # Output
-        if output == 'json':
+        if use_format == 'json':
             click.echo(json.dumps(apps, indent=2))
-        elif output == 'simple':
+        elif use_format == 'simple':
             for app in apps.get('data', []):
                 click.echo(f"{app.get('name', 'N/A')} {app.get('id', 'N/A')}")
         else:  # table
@@ -280,7 +293,7 @@ def list_apps(ctx, output):
 @app_group.command('get')
 @click.argument('app_identifier')
 @click.option('--limit', type=int, default=20, help='Maximum number of vulnerabilities to show')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
 @click.pass_context
@@ -429,7 +442,7 @@ def get_app_latest_scan(ctx, app_identifier, limit, output, no_cache):
 
 @scan_group.command('list')
 @click.argument('app_identifier', required=False)
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--limit', type=int, default=None, help='Maximum number of scans to return')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
@@ -482,9 +495,12 @@ def list_scans(ctx, app_identifier, output, limit, no_cache):
             else:
                 app_id = app_identifier
         
+        config_manager = ConfigManager()
+        use_format = determine_output_format(output, config_manager)
+        
         # Get applications for name lookup (if showing table format)
         app_names = {}
-        if output == 'table':
+        if use_format == 'table':
             apps_cache_key = "apps_all"
             cached_apps = cache_manager.get('appsec_api', apps_cache_key) if cache_manager else None
             
@@ -567,7 +583,7 @@ def list_scans(ctx, app_identifier, output, limit, no_cache):
 
 @scan_group.command('get')
 @click.argument('scan_id')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--limit', type=int, default=20, help='Maximum number of vulnerabilities to show')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')

@@ -1,3 +1,4 @@
+import sys
 import json
 import click
 from rich.console import Console
@@ -9,6 +10,15 @@ from utils.exceptions import APIError, AuthenticationError, ConfigurationError
 from api.insightvm_cloud import InsightVMCloudClient
 
 console = Console()
+
+def determine_output_format(output, config):
+    """Determine output format with pipe detection"""
+    if output:
+        return output
+    elif not sys.stdout.isatty():
+        return 'json'
+    else:
+        return config.get('default_output', 'table')
 
 
 def _get_vm_cloud_client(ctx) -> InsightVMCloudClient:
@@ -113,7 +123,7 @@ def cloud_assets_group():
 @click.option('--site-id', type=str, help='Filter by site ID')
 @click.option('--asset-id', type=str, help='Filter by specific asset ID')
 @click.option('--hostname', type=str, help='Filter by hostname (case-insensitive substring match)')
-@click.option('--output', type=click.Choice(['table', 'json']), default='table', help='Output format')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
 def list_cloud_assets(ctx, cursor, size, site_id, asset_id, hostname, output):
     """List assets using Cloud API v4"""
@@ -131,7 +141,9 @@ def list_cloud_assets(ctx, cursor, size, site_id, asset_id, hostname, output):
             asset_ids=asset_ids
         )
         
-        if output == 'json':
+        config = ConfigManager()
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
             
@@ -214,7 +226,7 @@ def list_cloud_assets(ctx, cursor, size, site_id, asset_id, hostname, output):
 
 @cloud_assets_group.command(name='get')
 @click.argument('asset_id', required=True)
-@click.option('--output', type=click.Choice(['table', 'json']), default='table', help='Output format')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
 def get_cloud_asset(ctx, asset_id, output):
     """Get asset details by ID using Cloud API v4
@@ -230,7 +242,9 @@ def get_cloud_asset(ctx, asset_id, output):
         
         data = client.get_asset(full_asset_id)
         
-        if output == 'json':
+        config = ConfigManager()
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
             
@@ -299,7 +313,7 @@ def cloud_sites_group():
 @click.option('--page', type=int, help='Page number (alternative to cursor)')
 @click.option('--size', type=int, default=50, show_default=True, help='Number of sites per page')
 @click.option('--details/--no-details', default=False, help='Include detailed site information')
-@click.option('--output', type=click.Choice(['table', 'json']), default='table', help='Output format')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
 def list_cloud_sites(ctx, cursor, page, size, details, output):
     """List sites using Cloud API v4"""
@@ -313,7 +327,9 @@ def list_cloud_sites(ctx, cursor, page, size, details, output):
             include_details=details
         )
         
-        if output == 'json':
+        config = ConfigManager()
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
             
@@ -361,7 +377,7 @@ def cloud_vulns_group():
 @click.option('--site-id', type=str, help='Filter by site ID')
 @click.option('--asset-id', type=str, help='Filter by asset ID')
 @click.option('--vuln-id', type=str, help='Filter by vulnerability ID')
-@click.option('--output', type=click.Choice(['table', 'json']), default='table', help='Output format')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
 def list_cloud_vulns(ctx, cursor, size, site_id, asset_id, vuln_id, output):
     """Search vulnerabilities using Cloud API v4"""
@@ -381,7 +397,9 @@ def list_cloud_vulns(ctx, cursor, size, site_id, asset_id, vuln_id, output):
             vuln_ids=vuln_ids
         )
         
-        if output == 'json':
+        config = ConfigManager()
+        use_format = determine_output_format(output, config)
+        if use_format == 'json':
             click.echo(json.dumps(data, indent=2))
             return
             

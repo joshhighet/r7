@@ -1,3 +1,4 @@
+import sys
 import click
 import json
 import logging
@@ -13,6 +14,15 @@ from commands.logs_commands import siem_logs_group
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+def determine_output_format(output, config):
+    """Determine output format with pipe detection"""
+    if output:
+        return output
+    elif not sys.stdout.isatty():
+        return 'json'
+    else:
+        return config.get('default_output', 'simple')
 
 def build_investigation_rrn(investigation_id, region, organization_id):
     """Build full investigation RRN from parts"""
@@ -90,7 +100,7 @@ def investigation_group(ctx):
 @click.option('--assignee', help='Filter by assignee email address')
 @click.option('--start-time', help='Start time filter (ISO 8601 format)')
 @click.option('--end-time', help='End time filter (ISO 8601 format)')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--limit', type=int, default=None, help='Maximum number of investigations to return')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
@@ -140,9 +150,10 @@ def list_investigations(ctx, status, priority, assignee, start_time, end_time, o
         investigations_display = {'data': data}
 
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(investigations_display, indent=2))
-        elif output == 'simple':
+        elif use_format == 'simple':
             for investigation in data:
                 # Extract short ID for simple output too
                 investigation_id = investigation.get('rrn', 'N/A')
@@ -196,7 +207,7 @@ def list_investigations(ctx, status, priority, assignee, start_time, end_time, o
 
 @investigation_group.command('get')
 @click.argument('investigation_id')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def get_investigation(ctx, investigation_id, output):
@@ -222,7 +233,8 @@ def get_investigation(ctx, investigation_id, output):
         # Auto-save organization_id from response
         extract_and_save_org_id(config_manager, investigation)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(investigation, indent=2))
         else:
             # get_investigation returns data directly
@@ -265,7 +277,7 @@ def get_investigation(ctx, investigation_id, output):
 @click.option('--disposition', type=click.Choice(['BENIGN', 'MALICIOUS', 'NOT_APPLICABLE', 'UNDECIDED']),
               help='Investigation disposition')
 @click.option('--assignee', help='Assignee email address')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def create_investigation(ctx, title, priority, status, disposition, assignee, output):
@@ -299,7 +311,8 @@ def create_investigation(ctx, title, priority, status, disposition, assignee, ou
         
         investigation = client.create_investigation(investigation_data)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(investigation, indent=2))
         else:
             investigation_data = investigation if isinstance(investigation, dict) else {}
@@ -315,7 +328,7 @@ def create_investigation(ctx, title, priority, status, disposition, assignee, ou
 @investigation_group.command('set-status')
 @click.argument('investigation_id')
 @click.argument('status', type=click.Choice(['OPEN', 'INVESTIGATING', 'CLOSED']))
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def set_investigation_status(ctx, investigation_id, status, output):
@@ -338,7 +351,8 @@ def set_investigation_status(ctx, investigation_id, status, output):
         full_investigation_id = resolve_investigation_id(client, investigation_id, region, config_manager, org_id)
         result = client.set_investigation_status(full_investigation_id, status)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             console.print(f"[green]✓ Investigation {investigation_id} status set to {status}[/green]")
@@ -350,7 +364,7 @@ def set_investigation_status(ctx, investigation_id, status, output):
 @investigation_group.command('set-priority')
 @click.argument('investigation_id')
 @click.argument('priority', type=click.Choice(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']))
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def set_investigation_priority(ctx, investigation_id, priority, output):
@@ -373,7 +387,8 @@ def set_investigation_priority(ctx, investigation_id, priority, output):
         full_investigation_id = resolve_investigation_id(client, investigation_id, region, config_manager, org_id)
         result = client.set_investigation_priority(full_investigation_id, priority)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             console.print(f"[green]✓ Investigation {investigation_id} priority set to {priority}[/green]")
@@ -385,7 +400,7 @@ def set_investigation_priority(ctx, investigation_id, priority, output):
 @investigation_group.command('assign')
 @click.argument('investigation_id')
 @click.argument('assignee_email')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def assign_investigation(ctx, investigation_id, assignee_email, output):
@@ -408,7 +423,8 @@ def assign_investigation(ctx, investigation_id, assignee_email, output):
         full_investigation_id = resolve_investigation_id(client, investigation_id, region, config_manager, org_id)
         result = client.assign_investigation(full_investigation_id, assignee_email)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             console.print(f"[green]✓ Investigation {investigation_id} assigned to {assignee_email}[/green]")
@@ -428,7 +444,7 @@ def assign_investigation(ctx, investigation_id, assignee_email, output):
               help='Update investigation disposition')
 @click.option('--assignee-email', help='Email address of user to assign the investigation to')
 @click.option('--multi-customer', is_flag=True, help='Indicates multi-customer access (requires RRN format)')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def update_investigation(ctx, investigation_id, title, status, priority, disposition, assignee_email, multi_customer, output):
@@ -485,7 +501,8 @@ def update_investigation(ctx, investigation_id, title, status, priority, disposi
         # Update investigation
         result = client.update_investigation(full_investigation_id, update_data, multi_customer)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             # Extract short ID for display
@@ -516,7 +533,7 @@ def update_investigation(ctx, investigation_id, title, status, priority, disposi
 @investigation_group.command('alerts')
 @click.argument('investigation_id')
 @click.option('--limit', type=int, default=20, help='Maximum number of alerts to return (default: 20)')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
 @click.pass_context
@@ -546,9 +563,10 @@ def list_investigation_alerts(ctx, investigation_id, limit, output, no_cache):
         alerts = client.list_investigation_alerts(full_investigation_id, size=limit)
 
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(alerts, indent=2))
-        elif output == 'simple':
+        elif use_format == 'simple':
             data = alerts.get('data', []) or []
             for alert in data:
                 # Investigation alerts API uses 'id' field instead of 'rrn'
@@ -621,7 +639,7 @@ def alert_group(ctx):
 @alert_group.command('list')
 @click.option('--limit', type=int, default=20, help='Maximum number of alerts to return (default: 20)')
 @click.option('--rrns-only', is_flag=True, help='Return only alert RRNs without details')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
 @click.option('--full-output', is_flag=True, help='Include all fields in JSON output (default shows minimal fields matching table view)')
@@ -651,7 +669,8 @@ def list_alerts(ctx, limit, rrns_only, output, no_cache, full_output):
         )
 
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             if full_output:
                 # Full output - include all fields
                 click.echo(json.dumps(alerts, indent=2))
@@ -685,7 +704,7 @@ def list_alerts(ctx, limit, rrns_only, output, no_cache, full_output):
                     }
                 
                 click.echo(json.dumps(minimal_data, indent=2))
-        elif output == 'simple':
+        elif use_format == 'simple':
             if rrns_only:
                 # When rrns_only=True, the response contains RRNs in the 'rrns' field
                 rrns = alerts.get('rrns', []) or []
@@ -764,7 +783,7 @@ def list_alerts(ctx, limit, rrns_only, output, no_cache, full_output):
 
 @alert_group.command('get')
 @click.argument('alert_id')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def get_alert(ctx, alert_id, output):
@@ -816,7 +835,8 @@ def get_alert(ctx, alert_id, output):
         alert = client.get_alert(alert_rrn)
 
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(alert, indent=2))
         else:
             # Extract short ID for display
@@ -826,7 +846,7 @@ def get_alert(ctx, alert_id, output):
                 if len(parts) >= 6:
                     display_id = parts[-1]
             
-            if output == 'simple':
+            if use_format == 'simple':
                 click.echo(f"ID: {display_id}")
                 click.echo(f"Title: {alert.get('title', 'N/A')}")
                 click.echo(f"Status: {alert.get('status', 'N/A')}")
@@ -897,7 +917,7 @@ def get_alert(ctx, alert_id, output):
 @click.option('--add-tags', help='Comma-separated list of tags to add')
 @click.option('--remove-tags', help='Comma-separated list of tags to remove')
 @click.option('--comment', help='Reason for updating the alert (for audit log)')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def update_alert(ctx, alert_id, status, disposition, priority, assignee_id, investigation_rrn, 
@@ -985,7 +1005,8 @@ def update_alert(ctx, alert_id, status, disposition, priority, assignee_id, inve
         result = client.update_alert(alert_rrn, update_data)
 
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             # Extract short ID for display
@@ -1062,7 +1083,7 @@ def comment_group(ctx):
 @comment_group.command('list')
 @click.option('--target', help='Filter comments by target (investigation RRN)')
 @click.option('--investigation-id', help='Filter comments by investigation ID (will be converted to RRN)')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='table',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.option('--limit', type=int, help='Maximum number of comments to return')
 @click.pass_context
@@ -1106,9 +1127,10 @@ def list_comments(ctx, target, investigation_id, output, limit):
         comments = client.list_comments(target=resolved_target, params=params)
         
         # Output
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(comments, indent=2))
-        elif output == 'simple':
+        elif use_format == 'simple':
             data = comments.get('data', []) or []
             for comment in data:
                 comment_id = comment.get('rrn', 'N/A')
@@ -1159,7 +1181,7 @@ def list_comments(ctx, target, investigation_id, output, limit):
 @comment_group.command('create')
 @click.argument('investigation_id')
 @click.argument('body')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def create_comment(ctx, investigation_id, body, output):
@@ -1182,7 +1204,8 @@ def create_comment(ctx, investigation_id, body, output):
         
         comment = client.create_comment(resolved_target, body)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(comment, indent=2))
         else:
             comment_data = comment if isinstance(comment, dict) else {}
@@ -1196,7 +1219,7 @@ def create_comment(ctx, investigation_id, body, output):
 
 @comment_group.command('delete')
 @click.argument('comment_rrn')
-@click.option('--output', type=click.Choice(['simple', 'table', 'json']), default='simple',
+@click.option('--output', type=click.Choice(['simple', 'table', 'json']),
               help='Output format')
 @click.pass_context
 def delete_comment(ctx, comment_rrn, output):
@@ -1214,7 +1237,8 @@ def delete_comment(ctx, comment_rrn, output):
         client = Rapid7Client(api_key, region, cache_manager)
         result = client.delete_comment(comment_rrn)
         
-        if output == 'json':
+        use_format = determine_output_format(output, config_manager)
+        if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
             console.print(f"[green]✓ Comment deleted successfully[/green]")
