@@ -32,11 +32,13 @@ python3 -m venv r7/.venv && cd r7 \
 && pip install -r requirements.txt
 # run
 ./r7 --help
+# optionally add r7 to your PATH with the following, assuming zsh shell
+echo 'alias r7=$PWD/r7' >> ~/.zshrc
 ```
 
-> ./r7 is a zsh wrapper for r7.py. setup a venv to get going. you will benefit from having `jq` - optionally add r7 to your PATH with `echo alias r7=$PWD/r7>>~/.zshrc`
+> ./r7 is a zsh wrapper for r7.py. setup a venv to get going. you will benefit from having `jq`
 
-each top level and subcommand is thoroughly documented. use `--help` for more information. dev/test only done on mac, changes needed for nix/win support.
+each top level and subcommand is thoroughly documented. use `--help` for more information.
 
 you'll need a Rapid7 api key - _[create here.](https://insight.rapid7.com/platform#/administration/apiKeyManagement/user)_
 
@@ -50,13 +52,6 @@ r7 config set --region au
 ```
 
 view with `r7 config show` - credentials sit in macOS Keychain. PR's are welcome for xplatform support.
-
-if you want to globally invoke this, add it to your path. choose your own destiny - this is one way, assuming you cloned the repo to ~/Documents/GitHub/r7
-
-   ```zsh
-   alias r7=~/Documents/GitHub/r7/r7
-   ```
-
 
 > if you are interfacing vm directly (console v3 api), set the following
 
