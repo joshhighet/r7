@@ -1291,7 +1291,7 @@ def logs_overview(ctx, time_range, output, no_cache):
 @click.argument('log_name_or_id')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
-@click.option('--limit', type=int, help='Limit the number of results displayed')
+@click.option('--limit', type=int, default=80, help='Limit the number of results displayed (default: 80, use -1 for all)')
 @click.pass_context
 def topkeys(ctx, log_name_or_id, output, no_cache, limit):
     """Retrieve the most common keys for a log"""
@@ -1332,8 +1332,8 @@ def topkeys(ctx, log_name_or_id, output, no_cache, limit):
             data = cached_result
         
         if use_json:
-            # Apply limit to JSON output if specified
-            if limit and limit > 0:
+            # Apply limit to JSON output if specified (-1 means no limit)
+            if limit != -1:
                 limited_data = data.copy()
                 keys_data = limited_data.get('topkeys', [])
                 sorted_keys = sorted(keys_data, key=lambda x: x.get('weight', 0), reverse=True)
@@ -1373,10 +1373,13 @@ def topkeys(ctx, log_name_or_id, output, no_cache, limit):
             
             # Sort by weight (descending) and add ranking
             sorted_keys = sorted(keys_data, key=lambda x: x.get('weight', 0), reverse=True)
+            total_keys = len(sorted_keys)
             
-            # Apply limit if specified
-            if limit and limit > 0:
+            # Apply limit if specified (-1 means no limit)
+            was_truncated = False
+            if limit != -1 and len(sorted_keys) > limit:
                 sorted_keys = sorted_keys[:limit]
+                was_truncated = True
             
             max_weight = max((key.get('weight', 0) for key in sorted_keys), default=1)
             
@@ -1400,19 +1403,24 @@ def topkeys(ctx, log_name_or_id, output, no_cache, limit):
             
             console.print(table)
             
+            # Show truncation message if needed
+            if was_truncated:
+                console.print(f"\n[yellow]⚠️  Showing top {limit} keys out of {total_keys} total.[/yellow]")
+                console.print(f"[dim]Use --limit -1 to see all keys, or --limit N to see a specific number.[/dim]")
+            
             # Show summary stats
-            total_keys = len(keys_data)
-            avg_weight = sum(key.get('weight', 0) for key in keys_data) / total_keys if total_keys > 0 else 0
+            total_keys_shown = len(sorted_keys)
+            avg_weight = sum(key.get('weight', 0) for key in keys_data) / len(keys_data) if keys_data else 0
             
             summary_table = Table(title="Summary Statistics")
             summary_table.add_column("Metric", style="cyan")
             summary_table.add_column("Value", style="white")
             
-            summary_table.add_row("Total Unique Keys", str(total_keys))
+            summary_table.add_row("Total Unique Keys", str(len(keys_data)))
             summary_table.add_row("Average Weight", f"{avg_weight:.2f}")
             summary_table.add_row("Max Weight", f"{max_weight:.2f}")
             
-            if total_keys > 0:
+            if sorted_keys:
                 summary_table.add_row("Most Common Key", sorted_keys[0].get('key', 'Unknown'))
             
             console.print(summary_table)

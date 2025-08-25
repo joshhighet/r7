@@ -46,7 +46,7 @@ def get_output_format(output, config_manager):
     if output:
         return output
     elif not sys.stdout.isatty():
-        return 'simple'
+        return 'json'
     else:
         return config_manager.get('default_output', 'simple')
 
@@ -84,7 +84,7 @@ def list_keys(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -145,7 +145,7 @@ def add_key(ctx, name, key_type, organization_id, output):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -220,7 +220,7 @@ def list_users(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -283,7 +283,7 @@ def get_user(ctx, user_id, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -345,7 +345,7 @@ def list_orgs(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -411,7 +411,7 @@ def list_products(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -472,7 +472,7 @@ def get_product(ctx, product_token, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -526,7 +526,7 @@ def list_product_users(ctx, product_token, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -594,7 +594,7 @@ def list_roles(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -659,7 +659,7 @@ def get_role(ctx, role_id, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -739,7 +739,7 @@ def list_resource_groups(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
@@ -820,7 +820,7 @@ def list_features(ctx, output, no_cache):
     if output:
         use_format = output
     elif not sys.stdout.isatty():
-        use_format = 'simple'
+        use_format = 'json'
     else:
         use_format = config_manager.get('default_output', 'simple')
     
