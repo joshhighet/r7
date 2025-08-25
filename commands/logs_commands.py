@@ -286,7 +286,7 @@ def display_raw_events_table(events, title, max_events=50, extra_columns=None, m
     
     # Add extra columns if specified (e.g., for multi-logset queries)
     if extra_columns:
-        for col_name, col_style, col_width in extra_columns:
+        for col_name, col_style, col_width, _ in extra_columns:
             table.add_column(col_name, style=col_style, width=col_width)
     
     table.add_column("Time", style="cyan", width=20)
@@ -515,6 +515,36 @@ def format_bytes(bytes_value):
             return f"{bytes_value:.1f} {unit}"
         bytes_value /= 1024.0
     return f"{bytes_value:.1f} EB"
+
+def get_logs_mapping(client, no_cache=False):
+    """Get cached mapping of log_id -> log_name"""
+    cache_key = "logs_mapping"
+    
+    if client.cache_manager and not no_cache:
+        cached_mapping = client.cache_manager.get('logs_metadata', cache_key)
+        if cached_mapping:
+            return cached_mapping
+    
+    try:
+        # Fetch from API (same call overview already makes)
+        base_url = client.get_base_url('idr')
+        response = client.make_request("GET", f"{base_url}/management/logs")
+        if response.status_code != 200:
+            return {}
+        
+        logs_data = response.json()['logs']
+        
+        # Build mapping
+        mapping = {log['id']: log['name'] for log in logs_data}
+        
+        # Cache with reasonable TTL (logs don't change often)
+        if client.cache_manager and not no_cache:
+            client.cache_manager.set('logs_metadata', cache_key, mapping)
+        
+        return mapping
+    except Exception:
+        # If logs mapping fails, return empty dict to avoid breaking queries
+        return {}
 
 def get_client_and_config(ctx, api_key=None):
     """Get configured API client and config manager"""
@@ -815,8 +845,9 @@ def query_log(ctx, log_name_or_id, query, time_range, from_time, to_time, from_d
 @click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
+@click.option('--no-show-source', is_flag=True, help='Hide log source column in table output')
 @click.pass_context
-def query_logset(ctx, logset_name_or_id, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache):
+def query_logset(ctx, logset_name_or_id, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache, no_show_source):
     """Query an entire logset with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -870,9 +901,19 @@ def query_logset(ctx, logset_name_or_id, query, time_range, from_time, to_time, 
             has_stats = 'statistics' in data and data['statistics']
             
             if has_events:
+                # Get logs mapping for source column (unless disabled)
+                extra_columns = None
+                if not no_show_source:
+                    logs_mapping = get_logs_mapping(client, no_cache)
+                    if logs_mapping:
+                        extra_columns = [
+                            ("Source", "green", 35, lambda event: logs_mapping.get(event.get('log_id', ''), event.get('log_id', 'Unknown')[:8]))
+                        ]
+                
                 total_events = display_raw_events_table(
                     data['events'],
-                    f"Logset Query Results: {logset_name_or_id}"
+                    f"Logset Query Results: {logset_name_or_id}",
+                    extra_columns=extra_columns
                 )
                 
                 # Show pagination info
@@ -911,8 +952,9 @@ def query_logset(ctx, logset_name_or_id, query, time_range, from_time, to_time, 
 @click.option('--full-output', is_flag=True, help='Show complete JSON structure (default shows only events)')
 @click.option('--max-result-pages', type=int, help='Max result pages to fetch (overrides smart limit detection)')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this query')
+@click.option('--no-show-source', is_flag=True, help='Hide log source column in table output')
 @click.pass_context
-def query_all_logsets(ctx, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache):
+def query_all_logsets(ctx, query, time_range, from_time, to_time, from_date, to_date, output, full_output, max_result_pages, no_cache, no_show_source):
     """Query all logsets at once with LEQL"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -985,9 +1027,19 @@ def query_all_logsets(ctx, query, time_range, from_time, to_time, from_date, to_
             has_stats = 'statistics' in data and data['statistics']
             
             if has_events:
+                # Get logs mapping for source column (unless disabled)
+                extra_columns = None
+                if not no_show_source:
+                    logs_mapping = get_logs_mapping(client, no_cache)
+                    if logs_mapping:
+                        extra_columns = [
+                            ("Source", "green", 35, lambda event: logs_mapping.get(event.get('log_id', ''), event.get('log_id', 'Unknown')[:8]))
+                        ]
+                
                 total_events = display_raw_events_table(
                     data['events'],
-                    "All Logsets Query Results"
+                    "All Logsets Query Results",
+                    extra_columns=extra_columns
                 )
                 
                 # Show pagination info
