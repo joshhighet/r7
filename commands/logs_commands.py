@@ -1479,6 +1479,120 @@ def logs_overview(ctx, time_range, output, no_cache):
     except (APIError, ValueError) as e:
         click.echo(f"❌ {e}", err=True)
 
+@siem_logs_group.command(name='searchstats')
+@click.option('--limit', type=int, default=10, help='Limit number of results returned (default: 10)')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--no-cache', is_flag=True, help='Disable caching for this request')
+@click.pass_context
+def search_stats(ctx, limit, output, no_cache):
+    """Show search statistics and query performance metrics"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+    
+    try:
+        # Get search stats from the API
+        base_url = client.get_base_url('idr')
+        url = f"{base_url.replace('/management', '')}/search-stats"
+        
+        response = client.make_request('GET', url)
+        if response.status_code != 200:
+            raise APIError(f"Failed to fetch search stats: {response.status_code} - {response.text}")
+        
+        data = response.json()
+        search_stats = data.get('search_stats', [])
+        
+        # Apply limit (default 10)
+        search_stats = search_stats[:limit]
+        
+        if use_json:
+            click.echo(json.dumps(data, indent=2))
+            return
+        
+        if not search_stats:
+            console.print("No search statistics found")
+            return
+        
+        # Table output  
+        total_available = len(data.get('search_stats', []))
+        showing_count = len(search_stats)
+        title_suffix = f" (showing {showing_count} of {total_available})" if showing_count < total_available else f" ({showing_count} queries)"
+        
+        table = Table(title=f"Search Statistics{title_suffix}")
+        table.add_column('Date', style='cyan', width=16)
+        table.add_column('Duration', style='magenta', justify='right', width=8)
+        table.add_column('Events', style='green', justify='right', width=12)
+        table.add_column('Efficiency', style='yellow', justify='right', width=10)
+        table.add_column('Source', style='blue', width=8)
+        table.add_column('Query', style='white', no_wrap=False)
+        
+        for stat in search_stats:
+            # Parse timestamp
+            timestamp = stat.get('date', 0)
+            if timestamp:
+                from datetime import datetime
+                dt = datetime.fromtimestamp(timestamp / 1000)
+                date_str = dt.strftime('%m-%d %H:%M:%S')
+            else:
+                date_str = 'Unknown'
+            
+            # Performance metrics
+            duration_ms = stat.get('statistics', {}).get('duration_ms', 0)
+            events_all = stat.get('statistics', {}).get('events_all', 0)
+            events_matched = stat.get('statistics', {}).get('events_matched', 0)
+            events_checked = stat.get('statistics', {}).get('events_checked', 0)
+            
+            # Format duration
+            if duration_ms > 1000:
+                duration_str = f"{duration_ms/1000:.1f}s"
+            else:
+                duration_str = f"{duration_ms}ms"
+            
+            # Format events
+            if events_all > 1000000:
+                events_str = f"{events_all/1000000:.1f}M"
+            elif events_all > 1000:
+                events_str = f"{events_all/1000:.1f}K"
+            else:
+                events_str = str(events_all)
+            
+            # Calculate efficiency (matched/checked ratio)
+            if events_checked > 0:
+                efficiency = (events_matched / events_checked) * 100
+                efficiency_str = f"{efficiency:.1f}%"
+            else:
+                efficiency_str = "N/A"
+            
+            # Get query statement and source
+            query = stat.get('leql', {}).get('statement', '')
+            source = stat.get('source', '').strip()
+            
+            # Format source for display
+            if source == 'logview':
+                source_str = 'UI'
+            elif source == '':
+                source_str = 'API'
+            else:
+                source_str = source[:8]  # Truncate if longer
+            
+            table.add_row(
+                date_str,
+                duration_str,
+                events_str,
+                efficiency_str,
+                source_str,
+                query
+            )
+        
+        console.print(table)
+        
+        # Show helpful information about pagination
+        if showing_count < total_available:
+            console.print(f"\n[dim]💡 Use --limit {total_available} to see all {total_available} queries, or --limit N for a specific number[/dim]")
+        
+    except Exception as e:
+        console.print(f"❌ Error fetching search statistics: {e}")
+
+
 @siem_logs_group.command(name='topkeys')
 @click.argument('log_name_or_id')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
