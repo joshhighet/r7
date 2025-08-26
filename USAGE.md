@@ -50,10 +50,9 @@ You can list investigations with `r7 siem investigation list` and retrieve speci
 
 # ASM
 
-`asm` is how we interface with Surface Command (CAASM) - A correlative asset graph with relational connectors to various enterprise toolsets.
-To understand which connections have been established and the Neo4J types they make available to us, run `r7 asm apps`
-To query data within the asset graph, use `r7 asm cypher` - `r7 asm cypher examples` has a number of basic examples to show correlative properties.
-Cypher is the graph query language used by ASM and more information can be found on the syntax with `r7 asm cypher docs` and examples can be seen with `r7 asm cypher examples`
+`asm` is how we interface with Surface Command's correlative asset graph with relational connectors to various enterprise toolsets.  To understand which connections have been established and the types they make available to us, run `r7 asm apps`. We leverage openCypher (OC) making queries to AgensGraph (not ANSI-SQL). To query data within the asset graph, use `r7 asm cypher` - `r7 asm cypher examples` has a number of basic examples to show correlative properties.
+
+More information can be found on our OC syntax with `r7 asm cypher docs` and examples can be seen with `r7 asm cypher examples`
 A simple asset search may look something like; `r7 asm cypher query 'MATCH (m:Asset) WHERE m.hostnames ISTARTS WITH "multisocks.dark" RETURN m' --columns 'm.name,m.sources,m.hostnames,m.ips'` - Outputs can be pretty verbose, you can process some of this out when you understand the jsonpaths - here's an example: `r7 asm cypher query 'MATCH (m:Machine) RETURN m.name, m.sources, size(m.ips) as ip_count' | jq -r '.items[] | [.data[0], (.data[1] | join(",")), .data[2]] | @tsv'`
 
 For example to get 10 vulns on host windows-desktop we could use `r7 asm cypher query "MATCH (m:Machine)-->(v:Rapid7IVMVulnerability) WHERE m.name = 'windows-desktop' RETURN v LIMIT 10"`. We could look for hosts with docker bridge networks with something like `r7 asm cypher query "MATCH (m:Machine) WHERE any(ip IN m.ips WHERE ip STARTS WITH '172.') RETURN m.name, [ip IN m.ips WHERE ip STARTS WITH '172.'] as docker_ips"`. We could check out assets we have in multiple security tools with `r7 asm cypher query "MATCH (m:Machine) WHERE size(m.sources) >= 3 RETURN m.name, m.sources, size(m.sources) as source_count ORDER BY source_count DESC"` and review the users on endpoints with some level of administrative access with `r7 asm cypher query "MATCH (m:Machine)-->(u:User) WHERE u.is_administrator = true RETURN m.name, u.name"`
