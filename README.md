@@ -40,6 +40,8 @@ echo 'alias r7=$PWD/r7' >> ~/.zshrc
 
 each top level and subcommand is thoroughly documented. use `--help` for more information.
 
+direct a language model to review [USAGE.md](USAGE.md) before using this tool for better results.
+
 you'll need a Rapid7 api key - _[create here.](https://insight.rapid7.com/platform#/administration/apiKeyManagement/user)_
 
 ```bash
