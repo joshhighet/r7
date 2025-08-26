@@ -4,7 +4,7 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
 
 ```zsh
 -> account (management)
-    -> features, orgs, keys, products, groups, roles, users
+    -> features, keys, orgs, products, groups, roles, users
 -> appsec (web app scans, findings)
     -> app+scan,list/get
 -> asm (surface command cypher queries, apps/sdk)
@@ -16,9 +16,9 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
 -> ic (manage automation jobs, execute workflows)
     -> artifacts, jobs, workflows
 -> siem (search logs, manage alerts/investigations)
-    -> logs, alerts, investigations
+    -> alerts, investigations, logs: query, keys, stats, usage
 -> vm (core vulnerability mgt, console & cloud)
-    -> assets, console, scans, sites, vulns
+    -> assets, bulk-export, sites, vulns, console: manage assets
 ```
 
 ## setup

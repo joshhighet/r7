@@ -34,7 +34,8 @@ class Rapid7Client:
             'account': f"https://{self.region}.api.insight.rapid7.com/account/api/1",
             'appsec': f"https://{self.region}.api.insight.rapid7.com/ias/v1",
             'usage': f"https://{self.region}.rest.logs.insight.rapid7.com/usage",
-            'ic': f"https://{self.region}.api.insight.rapid7.com/connect"
+            'ic': f"https://{self.region}.api.insight.rapid7.com/connect",
+            'vm_export': f"https://{self.region}.api.insight.rapid7.com/export/graphql"
         }
         return urls.get(product)
     def make_request(self, method, url, data=None, params=None, retries=5, timeout=30):

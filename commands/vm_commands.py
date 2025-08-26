@@ -69,9 +69,12 @@ vm_group.add_command(console_group)
 from commands.vm_cloud_commands import (
     cloud_assets_group, cloud_sites_group, cloud_vulns_group
 )
+from commands.vm_bulk_export_commands import bulk_export_group
+
 vm_group.add_command(cloud_assets_group)
 vm_group.add_command(cloud_sites_group) 
 vm_group.add_command(cloud_vulns_group)
+vm_group.add_command(bulk_export_group)
 
 
 @console_group.command(name='config-test')

@@ -1,5 +1,6 @@
 import json
 import logging
+import requests
 from utils.exceptions import APIError, AuthenticationError, ConfigurationError
 from api.client import Rapid7Client
 
@@ -203,3 +204,96 @@ class InsightVMCloudClient(Rapid7Client):
         if response.status_code != 200:
             raise APIError(f"Error searching vulnerabilities: {response.status_code} - {response.text}")
         return response.json()
+    
+    # Bulk Export API (GraphQL)
+    
+    def create_policy_export(self):
+        """Initiate a bulk export of agent-based policies and assets"""
+        url = self.get_base_url('vm_export')
+        
+        # GraphQL mutation to create policy export
+        query = """
+        mutation CreatePolicyExport {
+            createPolicyExport(input:{}) {
+                id
+            }
+        }
+        """
+        
+        # GraphQL requires different headers
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        
+        response = requests.post(url, headers=headers, json={'query': query}, timeout=30)
+        
+        if response.status_code != 200:
+            raise APIError(f"Error creating policy export: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        if 'errors' in result:
+            raise APIError(f"GraphQL error: {result['errors']}")
+        
+        return result.get('data', {}).get('createPolicyExport', {})
+    
+    def create_vulnerability_export(self):
+        """Initiate a bulk export of all vulnerabilities and assets"""
+        url = self.get_base_url('vm_export')
+        
+        # GraphQL mutation to create vulnerability export
+        query = """
+        mutation CreateVulnerabilityExport {
+            createVulnerabilityExport(input:{}) {
+                id
+            }
+        }
+        """
+        
+        # GraphQL requires different headers
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        
+        response = requests.post(url, headers=headers, json={'query': query}, timeout=30)
+        
+        if response.status_code != 200:
+            raise APIError(f"Error creating vulnerability export: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        if 'errors' in result:
+            raise APIError(f"GraphQL error: {result['errors']}")
+        
+        return result.get('data', {}).get('createVulnerabilityExport', {})
+    
+    def get_export_status(self, export_id):
+        """Get the status and download URLs for an export"""
+        url = self.get_base_url('vm_export')
+        
+        # GraphQL query to get export status
+        query = f"""
+        query GetExport {{
+            export(id: "{export_id}") {{
+                id
+                status
+                dataset
+                timestamp
+                result {{
+                    prefix
+                    urls
+                }}
+            }}
+        }}
+        """
+        
+        # GraphQL requires different headers
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        
+        response = requests.post(url, headers=headers, json={'query': query}, timeout=30)
+        
+        if response.status_code != 200:
+            raise APIError(f"Error getting export status: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        if 'errors' in result:
+            raise APIError(f"GraphQL error: {result['errors']}")
+        
+        return result.get('data', {}).get('export', {})
