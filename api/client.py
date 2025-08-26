@@ -860,11 +860,11 @@ class Rapid7Client:
         base_url = self.get_base_url('ic')
         if not base_url:
             raise ConfigurationError("InsightConnect base URL could not be determined from region")
-        # API uses 'inactivate' for deactivation
-        url = f"{base_url}/v2/workflows/{workflow_id}/inactivate"
+        # API uses 'deactivate' for deactivation
+        url = f"{base_url}/v2/workflows/{workflow_id}/deactivate"
         response = self.make_request("POST", url)
         if response.status_code != 200:
-            raise APIError(f"Error inactivating workflow {workflow_id}: {response.status_code} - {response.text}")
+            raise APIError(f"Error deactivating workflow {workflow_id}: {response.status_code} - {response.text}")
         return response.json()
 
     def ic_export_workflow(self, workflow_id: str, exclude_config_details: bool = False):
