@@ -33,7 +33,7 @@ def _get_vm_console_client(config: ConfigManager) -> InsightVMConsoleClient:
     verify_ssl = bool(config.get('vm_verify_ssl', True))
 
     if vm_user and vm_pass:
-        return InsightVMConsoleClient(base_url, username=vm_user, password=vm_pass, verify_ssl=verify_ssl)
+        return InsightVMConsoleClient(base_url, username=vm_user, password=vm_pass, verify_ssl=verify_ssl, timeout=5)
     raise AuthenticationError("VM console credentials missing. Set username via 'r7 config cred vm set-user --username ...' and password via 'r7 config cred vm set-password'.")
 
 
