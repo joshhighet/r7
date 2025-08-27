@@ -323,7 +323,7 @@ def get_app_latest_scan(ctx, app_identifier, limit, output, no_cache):
                 try:
                     similar_apps = _find_similar_app_names(client, app_identifier)
                     if similar_apps:
-                        console.print(f"\n[yellow]Did you mean one of these?[/yellow]")
+                        console.print("\n[yellow]Did you mean one of these?[/yellow]")
                         for app_name in similar_apps:
                             console.print(f"  • {app_name}")
                     else:
@@ -334,7 +334,7 @@ def get_app_latest_scan(ctx, app_identifier, limit, output, no_cache):
                             console.print(f"  • {app.get('name', 'N/A')}")
                         if len(apps.get('data', [])) > 10:
                             console.print(f"  ... and {len(apps.get('data', [])) - 10} more")
-                    console.print(f"\n[dim]Use 'r7 appsec app list' to see all applications[/dim]")
+                    console.print("\n[dim]Use 'r7 appsec app list' to see all applications[/dim]")
                 except:
                     pass
                 raise click.Abort()
@@ -475,7 +475,7 @@ def list_scans(ctx, app_identifier, output, limit, no_cache):
                     try:
                         similar_apps = _find_similar_app_names(client, app_identifier)
                         if similar_apps:
-                            console.print(f"\n[yellow]Did you mean one of these?[/yellow]")
+                            console.print("\n[yellow]Did you mean one of these?[/yellow]")
                             for app_name in similar_apps:
                                 console.print(f"  • {app_name}")
                         else:
@@ -486,7 +486,7 @@ def list_scans(ctx, app_identifier, output, limit, no_cache):
                                 console.print(f"  • {app.get('name', 'N/A')}")
                             if len(apps.get('data', [])) > 10:
                                 console.print(f"  ... and {len(apps.get('data', [])) - 10} more")
-                        console.print(f"\n[dim]Use 'r7 appsec app list' to see all applications[/dim]")
+                        console.print("\n[dim]Use 'r7 appsec app list' to see all applications[/dim]")
                     except:
                         pass
                     raise click.Abort()
@@ -516,7 +516,7 @@ def list_scans(ctx, app_identifier, output, limit, no_cache):
                 app_names[app.get('id')] = app.get('name', 'Unknown')
         
         # Fetch scans with caching
-        cache_key = f"scans_all" if not app_id else f"scans_app_{app_id}"
+        cache_key = "scans_all" if not app_id else f"scans_app_{app_id}"
         cached_result = None
         if cache_manager:
             cached_result = cache_manager.get('appsec_api', cache_key)

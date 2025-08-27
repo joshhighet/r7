@@ -4,10 +4,8 @@ import re
 from datetime import datetime, timedelta
 import click
 from urllib.parse import quote
-from tabulate import tabulate
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from api.client import Rapid7Client
 from utils.config import ConfigManager
 from utils.cache import CacheManager
@@ -577,7 +575,6 @@ def siem_logs_group():
 def logs_leql():
     """Show LEQL (Log Entry Query Language) reference guide"""
     try:
-        import os
         from pathlib import Path
         
         # Get the path to the LEQL reference file
@@ -1078,28 +1075,28 @@ def logs_examples(output, log_id):
             "title": "Group InsightIDR alerts by status",
             "query": "groupby(\"service_info.status\")",
             "time_range": "Last 24 hours",
-            "cmd": f"r7 siem logs query \"InsightIDR Alerts\" \"groupby(\\\"service_info.status\\\")\" --time-range \"Last 24 hours\"",
+            "cmd": "r7 siem logs query \"InsightIDR Alerts\" \"groupby(\\\"service_info.status\\\")\" --time-range \"Last 24 hours\"",
             "notes": "Group and analyze alert statuses from InsightIDR."
         },
         {
             "title": "Group job status by hostname and status",
             "query": "groupby(\"hostname\",\"status\")",
             "time_range": "Last 7 days",
-            "cmd": f"r7 siem logs query \"Job Status\" \"groupby(\\\"hostname\\\",\\\"status\\\")\" --time-range \"Last 7 days\"",
+            "cmd": "r7 siem logs query \"Job Status\" \"groupby(\\\"hostname\\\",\\\"status\\\")\" --time-range \"Last 7 days\"",
             "notes": "Analyze job statuses across different hostnames."
         },
         {
             "title": "Analyze flagged messages from Sublime Security",
             "query": "where(\"type\"=\"message.flagged\" AND \"org_id\"=\"1e3aed28-2bdc-44f4-ae68-c2953ad94a12\") groupby(\"data.flagged_rules.0.detection_methods.2\",\"data.flagged_rules.0.tactics_and_techniques.0\")",
             "time_range": "Last 24 hours",
-            "cmd": f"r7 siem logs query \"sublime-security\" \"where(\\\"type\\\"=\\\"message.flagged\\\" AND \\\"org_id\\\"=\\\"1e3aed28-2bdc-44f4-ae68-c2953ad94a12\\\") groupby(\\\"data.flagged_rules.0.detection_methods.2\\\",\\\"data.flagged_rules.0.tactics_and_techniques.0\\\")\" --time-range \"Last 24 hours\"",
+            "cmd": "r7 siem logs query \"sublime-security\" \"where(\\\"type\\\"=\\\"message.flagged\\\" AND \\\"org_id\\\"=\\\"1e3aed28-2bdc-44f4-ae68-c2953ad94a12\\\") groupby(\\\"data.flagged_rules.0.detection_methods.2\\\",\\\"data.flagged_rules.0.tactics_and_techniques.0\\\")\" --time-range \"Last 24 hours\"",
             "notes": "Filter and group flagged messages by detection methods and tactics."
         },
         {
             "title": "Select geographic and account information",
             "query": "select(\"geoip_country_code\",\"geoip_organization\",\"account\",\"result\", \"source_json.event.parameters.0.value\",\"source_json.event.parameters.1.multiValue.0\")",
             "time_range": "Last 4 hours",
-            "cmd": f"r7 siem logs query c33297ce-3878-46a4-a0e8-2d62116ed541 \"select(\\\"geoip_country_code\\\",\\\"geoip_organization\\\",\\\"account\\\",\\\"result\\\", \\\"source_json.event.parameters.0.value\\\",\\\"source_json.event.parameters.1.multiValue.0\\\")\" --time-range \"Last 4 hours\"",
+            "cmd": "r7 siem logs query c33297ce-3878-46a4-a0e8-2d62116ed541 \"select(\\\"geoip_country_code\\\",\\\"geoip_organization\\\",\\\"account\\\",\\\"result\\\", \\\"source_json.event.parameters.0.value\\\",\\\"source_json.event.parameters.1.multiValue.0\\\")\" --time-range \"Last 4 hours\"",
             "notes": "Extract specific geographic and account fields from log events."
         }
     ]
@@ -1111,7 +1108,7 @@ def logs_examples(output, log_id):
         for i, e in enumerate(examples, 1):
             click.echo(f"{i}. {e['title']}")
             click.echo(f"   {e['notes']}")
-            click.echo(f"")
+            click.echo("")
             click.echo(f"   {e['cmd']}")
             click.echo()
         return
@@ -1764,7 +1761,7 @@ def topkeys(ctx, log_name_or_id, output, no_cache, limit):
             # Show truncation message if needed
             if was_truncated:
                 console.print(f"\n[yellow]⚠️  Showing top {limit} keys out of {total_keys} total.[/yellow]")
-                console.print(f"[dim]Use --limit -1 to see all keys, or --limit N to see a specific number.[/dim]")
+                console.print("[dim]Use --limit -1 to see all keys, or --limit N to see a specific number.[/dim]")
             
             # Show summary stats
             total_keys_shown = len(sorted_keys)

@@ -1,11 +1,8 @@
-import json
 import sys
 import click
 from rich.console import Console
-from rich.table import Table
 
 from utils.cli import ClientManager, OutputFormatter, common_output_options, error_handler
-from utils.config import ConfigManager
 
 console = Console()
 

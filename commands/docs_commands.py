@@ -1,12 +1,9 @@
 import json
 import sys
-import os
-import subprocess
 import click
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.markdown import Markdown
 from api.client import DocsClient
 from utils.config import ConfigManager
 from utils.cache import CacheManager

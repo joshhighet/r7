@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 import re
@@ -780,7 +779,7 @@ def start_scan(site_id, name, template_id, engine_id, hosts, asset_group_ids, ov
         # Success message
         scan_id = data.get('id')
         if scan_id:
-            console.print(f"✅ Scan started successfully!")
+            console.print("✅ Scan started successfully!")
             console.print(f"Scan ID: {scan_id}")
             console.print(f"Site ID: {site_id}")
             if name:

@@ -93,7 +93,7 @@ def _parse_return_clause(query):
         if alias_match:
             header_names.append(alias_match.group(1))
         # Check for property access (e.g., "s.service_port")
-        elif '.' in col and not '(' in col:
+        elif '.' in col and '(' not in col:
             # Extract property name after the last dot
             parts = col.split('.')
             header_names.append(parts[-1].strip())
@@ -505,7 +505,6 @@ def cypher_query(ctx, query, file, columns, output, limit, start, depth, order, 
 def cypher_docs():
     """Show Cypher DSL reference guide"""
     try:
-        import os
         from pathlib import Path
         
         # Get the path to the Cypher reference file

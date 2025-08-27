@@ -196,7 +196,7 @@ def export_policy(ctx, output_dir, no_download, output):
                 continue
         
         # Final summary
-        console.print(f"\n[green]✅ Export complete![/green]")
+        console.print("\n[green]✅ Export complete![/green]")
         console.print(f"Downloaded {len(downloaded_files)}/{len(urls)} files to:")
         console.print(f"[cyan]{export_dir}[/cyan]")
         
@@ -352,7 +352,7 @@ def export_vulnerabilities(ctx, output_dir, no_download, output):
                 continue
         
         # Final summary
-        console.print(f"\n[green]✅ Export complete![/green]")
+        console.print("\n[green]✅ Export complete![/green]")
         console.print(f"Downloaded {len(downloaded_files)}/{len(urls)} files to:")
         console.print(f"[cyan]{export_dir}[/cyan]")
         
@@ -440,7 +440,7 @@ def export_status(ctx, export_id, wait, output):
                 urls = result['urls']
             
             if urls:
-                console.print(f"\n[green]✅ Export ready for download![/green]")
+                console.print("\n[green]✅ Export ready for download![/green]")
                 
                 # Show breakdown by data type with file info
                 if isinstance(result, list):
@@ -469,7 +469,7 @@ def export_status(ctx, export_id, wait, output):
             elif status == 'FAILED':
                 console.print("\n[red]❌ Export failed[/red]")
             else:
-                console.print(f"\n[yellow]Export is still processing... Check again later[/yellow]")
+                console.print("\n[yellow]Export is still processing... Check again later[/yellow]")
                 
     except (APIError, AuthenticationError, ConfigurationError) as e:
         click.echo(f"❌ {e}", err=True)
@@ -515,7 +515,7 @@ def download_export(ctx, export_id, output_dir, show_urls):
         
         if show_urls:
             # Just display URLs with better organization
-            console.print(f"\n[cyan]Download URLs (valid for 15 minutes):[/cyan]")
+            console.print("\n[cyan]Download URLs (valid for 15 minutes):[/cyan]")
             
             if isinstance(result, list):
                 url_index = 1
@@ -597,9 +597,9 @@ def download_export(ctx, export_id, output_dir, show_urls):
                 console.print(f"[red]❌ Failed to download {filename}: {e}[/red]")
                 continue
         
-        console.print(f"\n[green]✅ Export download complete![/green]")
+        console.print("\n[green]✅ Export download complete![/green]")
         console.print(f"Files saved to: [cyan]{export_dir}[/cyan]")
-        console.print(f"\n[dim]Note: These Parquet files can be imported into data analysis tools like pandas, Apache Spark, or BI platforms.[/dim]")
+        console.print("\n[dim]Note: These Parquet files can be imported into data analysis tools like pandas, Apache Spark, or BI platforms.[/dim]")
         
     except (APIError, AuthenticationError, ConfigurationError) as e:
         click.echo(f"❌ {e}", err=True)

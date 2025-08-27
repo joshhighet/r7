@@ -316,7 +316,7 @@ def create_investigation(ctx, title, priority, status, disposition, assignee, ou
             click.echo(json.dumps(investigation, indent=2))
         else:
             investigation_data = investigation if isinstance(investigation, dict) else {}
-            console.print(f"[green]✓ Investigation created successfully[/green]")
+            console.print("[green]✓ Investigation created successfully[/green]")
             console.print(f"[bold cyan]ID:[/bold cyan] {investigation_data.get('id', 'N/A')}")
             console.print(f"[bold cyan]Title:[/bold cyan] {investigation_data.get('title', 'N/A')}")
             console.print(f"[bold cyan]Status:[/bold cyan] {investigation_data.get('status', 'N/A')}")
@@ -623,7 +623,7 @@ def list_investigation_alerts(ctx, investigation_id, limit, output, no_cache):
             
             # Show helpful hint about using alert get
             if data:
-                console.print(f"[dim]💡 Use 'r7 siem alert get <alert_id>' to view detailed information for any alert[/dim]")
+                console.print("[dim]💡 Use 'r7 siem alert get <alert_id>' to view detailed information for any alert[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -1209,7 +1209,7 @@ def create_comment(ctx, investigation_id, body, output):
             click.echo(json.dumps(comment, indent=2))
         else:
             comment_data = comment if isinstance(comment, dict) else {}
-            console.print(f"[green]✓ Comment created successfully[/green]")
+            console.print("[green]✓ Comment created successfully[/green]")
             console.print(f"[bold cyan]RRN:[/bold cyan] {comment_data.get('rrn', 'N/A')}")
             console.print(f"[bold cyan]Target:[/bold cyan] {comment_data.get('target', 'N/A')}")
             
@@ -1241,7 +1241,7 @@ def delete_comment(ctx, comment_rrn, output):
         if use_format == 'json':
             click.echo(json.dumps(result, indent=2))
         else:
-            console.print(f"[green]✓ Comment deleted successfully[/green]")
+            console.print("[green]✓ Comment deleted successfully[/green]")
             
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")

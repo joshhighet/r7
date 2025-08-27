@@ -12,7 +12,6 @@ from typing import Dict, Any, Optional, Union, List
 import click
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
 
 from .config import ConfigManager
 from .cache import CacheManager

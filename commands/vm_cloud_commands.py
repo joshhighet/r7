@@ -212,7 +212,7 @@ def list_cloud_assets(ctx, cursor, size, site_id, asset_id, hostname, output):
         if tenant_prefix:
             console.print(f"\n[dim]Short IDs shown (tenant prefix: {tenant_prefix[:20]}...) - Use 'r7 vm assets get <short-id>' to query assets[/dim]")
         else:
-            console.print(f"\n[dim]Tenant prefix will be auto-detected and saved on first run with multiple assets[/dim]")
+            console.print("\n[dim]Tenant prefix will be auto-detected and saved on first run with multiple assets[/dim]")
         
         # Show pagination info
         if metadata.get('cursor'):

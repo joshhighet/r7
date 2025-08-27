@@ -1,7 +1,6 @@
-import json
 import logging
 import requests
-from utils.exceptions import APIError, AuthenticationError, ConfigurationError
+from utils.exceptions import APIError
 from api.client import Rapid7Client
 
 logger = logging.getLogger(__name__)
