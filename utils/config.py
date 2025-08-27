@@ -1,6 +1,4 @@
-import os
 import json
-import click
 from pathlib import Path
 from .exceptions import ConfigurationError
 class ConfigManager:

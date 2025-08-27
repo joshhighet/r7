@@ -1,7 +1,6 @@
 """
 Test the CLI commands directly
 """
-import pytest
 from click.testing import CliRunner
 from r7 import cli
 

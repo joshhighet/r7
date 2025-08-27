@@ -3,10 +3,8 @@ import json
 import time
 import re
 import logging
-from urllib.parse import quote
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from utils.exceptions import *
-from utils.cache import CacheManager
+from utils.exceptions import AuthenticationError, APIError, RateLimitError, QueryError, ConfigurationError
 logger = logging.getLogger(__name__)
 class Rapid7Client:
     def __init__(self, api_key, region='us', cache_manager=None):
@@ -378,7 +376,7 @@ class Rapid7Client:
             raise QueryError("No logsets found in organization")
         
         # Build URL with multiple logset_name parameters
-        from urllib.parse import quote, urlencode
+        from urllib.parse import urlencode
         query_base_url = self.get_base_url('idr_query')
         
         # Create query parameters - multiple logset_name params

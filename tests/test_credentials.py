@@ -5,7 +5,7 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from click.testing import CliRunner
 import sys
 
@@ -122,15 +122,15 @@ class TestCredentialValidation:
         valid_lower, _ = CredentialManager.validate_api_key(lower_key)
         valid_upper, _ = CredentialManager.validate_api_key(upper_key)
         
-        assert valid_lower == True
-        assert valid_upper == True  # Or False, depending on R7's requirements
+        assert valid_lower is True
+        assert valid_upper is True  # Or False, depending on R7's requirements
     
     def test_credential_with_special_chars(self):
         """Test API key with special characters (your validation is lenient)"""
         special_chars = "a1b2c3d4-e5f6-7890-1234-567890abcde!"
         valid, msg = CredentialManager.validate_api_key(special_chars)
         # Your current validation accepts this (only checks for some alphanumeric)
-        assert valid == True
+        assert valid is True
     
     @pytest.mark.parametrize("test_key,expected", [
         ("a1b2c3d4-e5f6-7890-1234-567890abcdef", True),   # Valid UUID format

@@ -1,6 +1,5 @@
 import os
 import keyring
-import click
 from .exceptions import AuthenticationError
 class CredentialManager:
     SERVICE_NAME = "rapid7-cli"

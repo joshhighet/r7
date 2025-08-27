@@ -25,7 +25,7 @@ class TestConfigManager:
         
         config = ConfigManager(config_path)
         assert config.get('region') == 'au'
-        assert config.get('cache_enabled') == True
+        assert config.get('cache_enabled') is True
         
         # Clean up
         Path(config_path).unlink(missing_ok=True)
