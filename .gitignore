@@ -1,1 +1,8 @@
 *.pyc
+__pycache__/
+/.venv
+/build/
+/dist/
+/*.egg-info/
+/r7_cli.egg-info/
+.DS_Store
