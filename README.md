@@ -21,28 +21,27 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
     -> assets, bulk-export, sites, vulns, console: manage assets
 ```
 
-## setup
+## install
 
 ```bash
 # clone repo
-a=joshhighet/r7;gh repo clone $a||git clone github.com/$a
-# create venv and setup python
-python3 -m venv r7/.venv && cd r7 \
-&& source .venv/bin/activate \
-&& pip install -r requirements.txt
-# run
-./r7 --help
-# optionally add r7 to your PATH with the following, assuming zsh shell
-echo 'alias r7=$PWD/r7' >> ~/.zshrc
+git clone github.com/joshhighet/r7
+cd r7 && pipx install .
+r7 --help
 ```
 
-> ./r7 is a zsh wrapper for r7.py. setup a venv to get going. you will benefit from having `jq`
+## dev setup
 
-each top level and subcommand is thoroughly documented. use `--help` for more information.
+```bash
+a=joshhighet/r7;gh repo clone $a||git clone github.com/$a
+cd r7 && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 r7.py --help
+```
 
-direct a language model to review [USAGE.md](USAGE.md) before using this tool for better results.
+> pipx manages the venv automatically. you will benefit from having `jq`
 
-you'll need a Rapid7 api key - _[create here.](https://insight.rapid7.com/platform#/administration/apiKeyManagement/user)_
+## config
 
 ```bash
 # view setup
@@ -53,7 +52,11 @@ r7 config cred store
 r7 config set --region au
 ```
 
-view with `r7 config show` - credentials sit in macOS Keychain. PR's are welcome for xplatform support.
+each top level and subcommand is thoroughly documented. use `--help` for more information.
+
+direct a language model to review [USAGE.md](USAGE.md) before using this tool for better results.
+
+you'll need a Rapid7 api key - _[create here.](https://insight.rapid7.com/platform#/administration/apiKeyManagement/user)_ - credentials added reside safely on device (macOS keychain, Windows credstore, nix keyring).
 
 > if you are interfacing vm directly (console v3 api), set the following
 

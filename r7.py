@@ -52,5 +52,9 @@ cli.add_command(siem_group)
 cli.add_command(vm_group)
 cli.add_command(ic_group)
 
-if __name__ == '__main__':
+def main():
+    """Entry point for the r7 CLI"""
     cli(prog_name='r7')
+
+if __name__ == '__main__':
+    main()
