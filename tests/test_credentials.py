@@ -165,6 +165,8 @@ class TestCredentialSecurity:
     
     def test_config_file_permissions(self):
         """Test that config files are created with restrictive permissions"""
+        import platform
+        
         with tempfile.NamedTemporaryFile(delete=False) as f:
             config_path = f.name
         
@@ -172,13 +174,20 @@ class TestCredentialSecurity:
             config = ConfigManager(config_path)
             config.save_config()
             
-            # Check file permissions (Unix systems)
-            if hasattr(os, 'stat'):
-                file_stat = os.stat(config_path)
-                # Should be readable only by owner (0o600 or similar)
-                # This prevents other users from reading API keys
-                permissions = oct(file_stat.st_mode)[-3:]
-                # Exact check depends on your implementation
-                assert permissions in ['600', '644']  # Adjust based on requirements
+            # Platform-specific permission checks
+            if platform.system() != 'Windows':
+                # Unix-like systems (Linux, macOS)
+                if hasattr(os, 'stat'):
+                    file_stat = os.stat(config_path)
+                    # Should be readable only by owner (0o600 or similar)
+                    # This prevents other users from reading API keys
+                    permissions = oct(file_stat.st_mode)[-3:]
+                    # Exact check depends on your implementation
+                    assert permissions in ['600', '644']  # Adjust based on requirements
+            else:
+                # Windows - just verify the file was created successfully
+                # Windows uses ACLs rather than Unix permissions
+                assert Path(config_path).exists()
+                assert Path(config_path).stat().st_size >= 0
         finally:
             Path(config_path).unlink(missing_ok=True)

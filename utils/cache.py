@@ -1,11 +1,21 @@
 import hashlib
 import json
+import platform
 from pathlib import Path
 from diskcache import Cache
 from .exceptions import ConfigurationError
 class CacheManager:
     def __init__(self, cache_dir=None, ttl=3600, max_size=1000):
-        self.cache_dir = Path(cache_dir) if cache_dir else Path.home() / '.cache' / 'rapid7-cli'
+        if cache_dir:
+            self.cache_dir = Path(cache_dir)
+        else:
+            # Use platform-appropriate cache directory
+            if platform.system() == 'Windows':
+                # Use AppData\Local on Windows
+                self.cache_dir = Path.home() / 'AppData' / 'Local' / 'rapid7-cli' / 'cache'
+            else:
+                # Unix-like systems (Linux, macOS)
+                self.cache_dir = Path.home() / '.cache' / 'rapid7-cli'
         self.ttl = ttl
         self.max_size = max_size  # Maximum number of cache entries
         self.cache = None
@@ -58,3 +68,12 @@ class CacheManager:
             'size': len(self.cache),
             'volume': self.cache.volume()
         }
+    
+    def close(self):
+        """Close the cache connection to release file locks"""
+        if self.cache is not None:
+            try:
+                self.cache.close()
+                self.cache = None
+            except Exception:
+                pass

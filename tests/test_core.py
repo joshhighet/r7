@@ -86,35 +86,43 @@ class TestCacheManager:
         """Test basic cache operations"""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache = CacheManager(cache_dir=temp_dir, ttl=3600)
-            
-            # Test basic operations
-            cache.set('test', 'query1', {'result': 'data1'})
-            result = cache.get('test', 'query1')
-            assert result == {'result': 'data1'}
-            
-            # Test cache miss
-            result = cache.get('test', 'nonexistent')
-            assert result is None
+            try:
+                # Test basic operations
+                cache.set('test', 'query1', {'result': 'data1'})
+                result = cache.get('test', 'query1')
+                assert result == {'result': 'data1'}
+                
+                # Test cache miss
+                result = cache.get('test', 'nonexistent')
+                assert result is None
+            finally:
+                cache.close()
 
     def test_cache_stats(self):
         """Test cache statistics"""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache = CacheManager(cache_dir=temp_dir, ttl=3600)
-            cache.set('test', 'query1', {'result': 'data1'})
-            
-            stats = cache.stats()
-            assert 'size' in stats
-            assert 'volume' in stats
+            try:
+                cache.set('test', 'query1', {'result': 'data1'})
+                
+                stats = cache.stats()
+                assert 'size' in stats
+                assert 'volume' in stats
+            finally:
+                cache.close()
 
     def test_cache_clear(self):
         """Test cache clearing"""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache = CacheManager(cache_dir=temp_dir, ttl=3600)
-            cache.set('test', 'query1', {'result': 'data1'})
-            
-            cache.clear()
-            result = cache.get('test', 'query1')
-            assert result is None
+            try:
+                cache.set('test', 'query1', {'result': 'data1'})
+                
+                cache.clear()
+                result = cache.get('test', 'query1')
+                assert result is None
+            finally:
+                cache.close()
 
 
 class TestAPIClient:
