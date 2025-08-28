@@ -12,7 +12,7 @@ class CredentialManager:
         """Get API key from various sources in priority order:
         1. Provided key (CLI argument)
         2. Environment variable R7_API_KEY
-        3. macOS Keychain
+        3. Keychain (or config file on Linux)
         """
         if provided_key:
             return provided_key
@@ -25,24 +25,52 @@ class CredentialManager:
                 return keychain_key
         except Exception:
             pass
+        # Linux fallback: check config file
+        import platform
+        if platform.system() == "Linux":
+            from .config import ConfigManager
+            cfg = ConfigManager()
+            if cfg.get('api_key_source') == 'file':
+                return cfg.get('api_key')
         return None
     @classmethod
     def store_api_key(cls, api_key):
-        """Store API key in macOS Keychain"""
+        """Store API key in keychain or config file (Linux fallback)"""
         try:
             keyring.set_password(cls.SERVICE_NAME, cls.API_KEY_NAME, api_key)
             return True
         except Exception as e:
+            # Linux without keyring backend - fallback to config file
+            import platform
+            if platform.system() == "Linux" and "No recommended backend" in str(e):
+                from .config import ConfigManager
+                cfg = ConfigManager()
+                cfg.set('api_key', api_key)
+                cfg.set('api_key_source', 'file')
+                cfg.save_config()
+                print(f"stored in ~/.rapid7_config.json (or use R7_API_KEY env)")
+                return True
             raise AuthenticationError(f"Failed to store API key in keychain: {e}")
     @classmethod
     def delete_api_key(cls):
-        """Delete API key from macOS Keychain"""
+        """Delete API key from keychain or config file"""
         try:
             keyring.delete_password(cls.SERVICE_NAME, cls.API_KEY_NAME)
             return True
         except keyring.errors.PasswordDeleteError:
             return False
         except Exception as e:
+            # Linux fallback: check config file
+            import platform
+            if platform.system() == "Linux" and "No recommended backend" in str(e):
+                from .config import ConfigManager
+                cfg = ConfigManager()
+                if cfg.get('api_key_source') == 'file':
+                    cfg.set('api_key', None)
+                    cfg.set('api_key_source', None)
+                    cfg.save_config()
+                    return True
+                return False
             raise AuthenticationError(f"Failed to delete API key from keychain: {e}")
     @classmethod
     def validate_api_key(cls, api_key):
