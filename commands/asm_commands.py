@@ -535,19 +535,47 @@ def cypher_examples(ctx, output, test):
     from pathlib import Path
     
     # Load examples from .cypher files
-    examples_dir = Path(__file__).parent.parent / 'examples' / 'asm'
-    
-    if not examples_dir.exists():
-        click.echo("❌ Examples directory not found: examples/asm/", err=True)
+    try:
+        import importlib.resources as resources
+        
+        # Try to access the examples package
+        try:
+            examples_package = resources.files('examples.asm')
+            examples_files = [f for f in examples_package.iterdir() if f.name.endswith('.cypher')]
+        except (ImportError, AttributeError):
+            # Fallback for development mode
+            examples_dir = Path(__file__).parent.parent / 'examples' / 'asm'
+            if not examples_dir.exists():
+                click.echo("❌ Examples directory not found: examples/asm/", err=True)
+                return
+            examples_files = list(examples_dir.glob('*.cypher'))
+            
+    except Exception as e:
+        click.echo(f"❌ Error accessing examples: {e}", err=True)
         return
     
     examples = []
     
     # Read all .cypher files in order
-    for cypher_file in sorted(examples_dir.glob('*.cypher')):
+    if 'examples_package' in locals():
+        # Using importlib.resources (installed package)
+        cypher_files = sorted([f for f in examples_files if f.name.endswith('.cypher')], key=lambda x: x.name)
+    else:
+        # Using filesystem (development mode)
+        cypher_files = sorted(examples_files, key=lambda x: x.name)
+    
+    for cypher_file in cypher_files:
         try:
-            with open(cypher_file, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Handle both importlib.resources and filesystem paths
+            if 'examples_package' in locals():
+                # Using importlib.resources (installed package)
+                content = cypher_file.read_text(encoding='utf-8')
+                filename = cypher_file.name
+            else:
+                # Using filesystem (development mode)
+                with open(cypher_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                filename = cypher_file.name
                 
             # Parse the file to extract metadata and query
             lines = content.strip().split('\n')
@@ -582,15 +610,18 @@ def cypher_examples(ctx, output, test):
             query = ' '.join(query_lines)
             
             if query:
+                # Get stem from filename (remove .cypher extension)
+                file_stem = filename.replace('.cypher', '')
                 examples.append({
-                    "title": title or cypher_file.stem.replace('_', ' ').title(),
+                    "title": title or file_stem.replace('_', ' ').title(),
                     "description": description,
                     "query": query,
                     "columns": columns,
-                    "filename": cypher_file.name
+                    "filename": filename
                 })
         except Exception as e:
-            click.echo(f"⚠️  Failed to read {cypher_file.name}: {e}", err=True)
+            file_display = getattr(cypher_file, 'name', str(cypher_file))
+            click.echo(f"⚠️  Failed to read {file_display}: {e}", err=True)
     
     if not examples:
         click.echo("No examples found", err=True)

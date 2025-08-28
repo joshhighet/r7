@@ -31,8 +31,9 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["api", "commands", "utils"]
+packages = ["api", "commands", "utils", "examples", "examples.asm"]
 py-modules = ["r7"]
 
 [tool.setuptools.package-data]
-"*" = ["*.md", "*.cypher"]
+"examples.asm" = ["*.cypher"]
+"*" = ["*.md"]
