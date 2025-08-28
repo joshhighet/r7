@@ -9,16 +9,17 @@ def cred_group():
     pass
 
 @cred_group.command()
-@click.option('--api-key', required=True, help='API key to store')
+@click.option('--api-key', prompt=True, hide_input=True, help='API key to store')
 def store(api_key):
-    """Store API key in macOS Keychain"""
+    """Store API key in keychain"""
     try:
-        if not CredentialManager.validate_api_key(api_key):
-            click.echo("Warning: API key appears to be invalid (too short)")
+        valid, msg = CredentialManager.validate_api_key(api_key)
+        if not valid:
+            click.echo(f"Warning: {msg}")
             if not click.confirm("Store anyway?"):
                 return
         CredentialManager.store_api_key(api_key)
-        click.echo("✅ API key stored successfully in macOS Keychain")
+        click.echo("✅ API key stored successfully in keychain")
         click.echo("You can now run commands without --api-key or R7_API_KEY")
     except AuthenticationError as e:
         click.echo(f"❌ Error: {e}", err=True)
@@ -73,7 +74,7 @@ def vm_set_password(password):
     """Store VM console password in keychain"""
     try:
         CredentialManager.store_vm_password(password)
-        click.echo("✅ VM console password stored in macOS Keychain")
+        click.echo("✅ VM console password stored in keychain")
     except AuthenticationError as e:
         click.echo(f"❌ Error: {e}", err=True)
 

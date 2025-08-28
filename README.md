@@ -21,19 +21,30 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
     -> assets, bulk-export, sites, vulns, console: manage assets
 ```
 
+python should be 3.11 or above !
+
 ## install
+
+_this approach leverages pipx follow the install guide if not already configured: [pypa/pipx ~ install-pipx](https://github.com/pypa/pipx?tab=readme-ov-file#install-pipx)_
 
 ```bash
 # clone repo
-git clone github.com/joshhighet/r7
+git clone https://github.com/joshhighet/r7
 cd r7 && pipx install .
 r7 --help
+```
+
+### update
+
+```bash
+git pull
+pipx reinstall r7-cli
 ```
 
 ## dev setup
 
 ```bash
-a=joshhighet/r7;gh repo clone $a||git clone github.com/$a
+git clone https://github.com/joshhighet/r7
 cd r7 && python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 r7.py --help
