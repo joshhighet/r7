@@ -26,6 +26,7 @@ class Rapid7Client:
         urls = {
             'idr': f"https://{self.region}.api.insight.rapid7.com/log_search",
             'idr_query': f"https://{self.region}.rest.logs.insight.rapid7.com",
+            'idr_health': f"https://{self.region}.api.insight.rapid7.com/idr/v1",
             'asm': f"https://{self.region}.api.insight.rapid7.com/surface/graph-api/objects/table",
             'asm_apps': f"https://{self.region}.api.insight.rapid7.com/surface/apps-api",
             'asm_profile': f"https://{self.region}.api.insight.rapid7.com/surface/auth-api/profile",
@@ -1129,6 +1130,50 @@ class Rapid7Client:
         if response.status_code != 200:
             raise APIError(f"Error fetching usage for log {log_key}: {response.status_code} - {response.text}")
         return response.json()
+
+    def get_health_metrics(self, size=50, index=0):
+        """Get SIEM datasource health metrics"""
+        base_url = self.get_base_url('idr_health')
+        url = f"{base_url}/health-metrics/"
+        params = {
+            'size': size,
+            'index': index
+        }
+        response = self.make_request("GET", url, params=params)
+        if response.status_code != 200:
+            raise APIError(f"Error fetching health metrics: {response.status_code} - {response.text}")
+        return response.json()
+
+    def get_all_health_metrics(self):
+        """Get all SIEM datasource health metrics by paginating through all pages"""
+        all_metrics = []
+        index = 0
+        size = 50
+
+        while True:
+            response = self.get_health_metrics(size=size, index=index)
+            data = response.get('data', [])
+            metadata = response.get('metadata', {})
+
+            if not data:
+                break
+
+            all_metrics.extend(data)
+
+            # Check if we've reached the end
+            total_data = metadata.get('total_data', len(data))
+            if len(all_metrics) >= total_data:
+                break
+
+            index += size
+
+        return {
+            'data': all_metrics,
+            'metadata': {
+                'total_data': len(all_metrics),
+                'fetched_all': True
+            }
+        }
 
 
 class DocsClient:

@@ -1782,6 +1782,296 @@ def topkeys(ctx, log_name_or_id, output, no_cache, limit):
             
             if total_keys >= 1000:
                 console.print("[dim]Note: Only the 1000 most common keys are returned by the API[/dim]")
-    
+
+    except (APIError, QueryError) as e:
+        click.echo(f"❌ {e}", err=True)
+
+
+@siem_logs_group.command(name='health')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--no-cache', is_flag=True, help='Disable caching for this request')
+@click.pass_context
+def health(ctx, output, no_cache):
+    """Check SIEM datasource health metrics"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+
+    try:
+        # Create cache key for all health metrics
+        cache_key = "all_health_metrics"
+
+        cached_result = None
+        if client.cache_manager and not no_cache:
+            cached_result = client.cache_manager.get('health_metrics', cache_key)
+            if cached_result:
+                if not use_json:
+                    console.print("📋 Using cached result", style="dim")
+
+        if not cached_result:
+            data = client.get_all_health_metrics()
+            if client.cache_manager and not no_cache:
+                client.cache_manager.set('health_metrics', cache_key, data)
+        else:
+            data = cached_result
+
+        if use_json:
+            click.echo(json.dumps(data, indent=2))
+        else:
+            # Separate display by metric type
+            metrics = data.get('data', []) if isinstance(data, dict) and 'data' in data else data
+            metadata = data.get('metadata', {})
+
+            if not metrics:
+                console.print("No health metrics found", style="yellow")
+                return
+
+            # Group metrics by type
+            agents = []
+            collectors = []
+            orchestrators = []
+            exporters = []
+            datasources = []
+
+            for metric in metrics:
+                rrn = metric.get('rrn', '')
+                if ":agents:" in rrn:
+                    agents.append(metric)
+                elif ":collection:" in rrn and ":collector:" in rrn and ":eventsource:" not in rrn:
+                    # True collectors (not datasources)
+                    collectors.append(metric)
+                elif ":orchestrator:" in rrn:
+                    orchestrators.append(metric)
+                elif ":exporter:" in rrn:
+                    exporters.append(metric)
+                elif ":eventsource:" in rrn:
+                    # All datasources (collector, webhook, cloudintegration)
+                    datasources.append(metric)
+
+            # Display Agent Summary
+            if agents:
+                for agent in agents:
+                    from rich.panel import Panel
+                    total = agent.get('total', 0)
+                    online = agent.get('online', 0)
+                    offline = agent.get('offline', 0)
+                    stale = agent.get('stale', 0)
+
+                    status_text = f"[green]✓ {online} Online[/green]"
+                    if offline > 0:
+                        status_text += f" | [red]✗ {offline} Offline[/red]"
+                    if stale > 0:
+                        status_text += f" | [yellow]⚠ {stale} Stale[/yellow]"
+
+                    console.print(Panel(
+                        f"[bold]Total Agents: {total}[/bold]\n{status_text}",
+                        title="[bold cyan]Agent Status Summary[/bold cyan]",
+                        expand=False
+                    ))
+                console.print()
+
+            # Display Collectors
+            if collectors:
+                table = Table(title="Collectors (Data Collection)", width=80)
+                table.add_column("Name", style="white")
+                table.add_column("State", style="green")
+                table.add_column("Memory", style="blue")
+                table.add_column("CPU", style="yellow")
+                table.add_column("Sources", style="cyan")
+                table.add_column("Last Active", style="dim")
+
+                for collector in collectors:
+                    name = collector.get('name', 'Unknown')
+                    state = collector.get('state', 'N/A')
+
+                    # Memory usage
+                    memory_used = collector.get('memory_used', 0)
+                    max_memory = collector.get('max_memory', 0)
+                    memory_str = "-"
+                    if memory_used and max_memory:
+                        memory_pct = (memory_used / max_memory) * 100
+                        memory_str = f"{memory_pct:.1f}%"
+
+                    # CPU usage
+                    cpu_used = collector.get('percent_cpu_used', 0)
+                    cpu_str = f"{cpu_used:.1f}%" if cpu_used else "-"
+
+                    # Event sources
+                    event_sources_used = collector.get('event_sources_used', 0)
+                    max_sources = collector.get('max_event_sources', 0)
+                    sources_str = f"{event_sources_used}/{max_sources}" if max_sources else str(event_sources_used)
+
+                    # Last active
+                    last_active = collector.get('last_active', 'N/A')
+                    if last_active != 'N/A' and 'T' in last_active:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(last_active.replace('Z', '+00:00'))
+                            last_active = dt.strftime('%m-%d %H:%M')
+                        except:
+                            last_active = last_active.split('T')[0]
+
+                    # Color state
+                    if state == "RUNNING":
+                        state = f"[green]{state}[/green]"
+                    elif state == "ERROR":
+                        state = f"[red]{state}[/red]"
+
+                    table.add_row(name, state, memory_str, cpu_str, sources_str, last_active)
+
+                console.print(table)
+                console.print()
+
+            # Display Orchestrators
+            if orchestrators:
+                table = Table(title="Orchestrators (Infrastructure)", width=80)
+                table.add_column("Name", style="white")
+                table.add_column("State", style="green")
+                table.add_column("Memory", style="blue")
+                table.add_column("Storage", style="yellow")
+                table.add_column("CPU", style="cyan")
+                table.add_column("Last Active", style="dim")
+
+                for orch in orchestrators:
+                    name = orch.get('name', 'Unknown')
+                    state = orch.get('state', 'N/A')
+
+                    # Memory
+                    memory_used = orch.get('memory_used', 0)
+                    max_memory = orch.get('max_memory', 0)
+                    memory_str = "-"
+                    if memory_used and max_memory:
+                        memory_pct = (memory_used / max_memory) * 100
+                        memory_str = f"{memory_pct:.1f}%"
+
+                    # Storage
+                    storage_used = orch.get('storage_used', 0)
+                    max_storage = orch.get('max_storage', 0)
+                    storage_str = "-"
+                    if storage_used and max_storage:
+                        storage_pct = (storage_used / max_storage) * 100
+                        storage_str = f"{storage_pct:.1f}%"
+
+                    # CPU
+                    cpu_used = orch.get('cpu_used', 0)
+                    cpu_str = f"{cpu_used:.1f}%" if cpu_used else "-"
+
+                    # Last active
+                    last_active = orch.get('last_active', 'N/A')
+                    if last_active != 'N/A' and 'T' in last_active:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(last_active.replace('Z', '+00:00'))
+                            last_active = dt.strftime('%m-%d %H:%M')
+                        except:
+                            last_active = last_active.split('T')[0]
+
+                    # Color state
+                    if state == "HEALTHY":
+                        state = f"[green]{state}[/green]"
+                    elif state == "ERROR":
+                        state = f"[red]{state}[/red]"
+
+                    table.add_row(name, state, memory_str, storage_str, cpu_str, last_active)
+
+                console.print(table)
+                console.print()
+
+            # Display Exporters
+            if exporters:
+                table = Table(title="Exporters (Data Export)", width=80)
+                table.add_column("Name", style="white")
+                table.add_column("State", style="green")
+                table.add_column("Issues", style="red")
+                table.add_column("Last Active", style="dim")
+
+                for exporter in exporters:
+                    name = exporter.get('name', 'Unknown')
+                    state = exporter.get('state', 'N/A')
+
+                    # Issues
+                    issue = exporter.get('issue')
+                    issue_str = "None"
+                    if issue:
+                        severity = issue.get('severity', 'UNKNOWN')
+                        message = issue.get('message', '')
+                        issue_str = f"[{severity}] {message}"
+
+                    # Last active
+                    last_active = exporter.get('last_active', 'N/A')
+                    if last_active != 'N/A' and 'T' in last_active:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(last_active.replace('Z', '+00:00'))
+                            last_active = dt.strftime('%m-%d %H:%M')
+                        except:
+                            last_active = last_active.split('T')[0]
+
+                    # Color state
+                    if state == "RUNNING":
+                        if issue:
+                            state = f"[yellow]{state}[/yellow]"  # Running but with issues
+                        else:
+                            state = f"[green]{state}[/green]"
+                    elif state == "ERROR":
+                        state = f"[red]{state}[/red]"
+
+                    table.add_row(name, state, issue_str, last_active)
+
+                console.print(table)
+                console.print()
+
+            # Display Datasources
+            if datasources:
+                table = Table(title="Datasources (Event Sources)", width=80)
+                table.add_column("Name", style="white")
+                table.add_column("Type", style="cyan")
+                table.add_column("State", style="green")
+                table.add_column("Last Active", style="dim")
+
+                for source in datasources:
+                    name = source.get('name', 'Unknown')
+                    state = source.get('state', 'N/A')
+
+                    # Determine datasource type from RRN
+                    rrn = source.get('rrn', '')
+                    if ':eventsource:collector:' in rrn:
+                        source_type = "Collector"
+                    elif ':eventsource:webhook:' in rrn:
+                        source_type = "Webhook"
+                    elif ':eventsource:cloudintegration:' in rrn:
+                        source_type = "Cloud"
+                    else:
+                        source_type = "Unknown"
+
+                    # Last active
+                    last_active = source.get('last_active', 'N/A')
+                    if last_active != 'N/A' and 'T' in last_active:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(last_active.replace('Z', '+00:00'))
+                            last_active = dt.strftime('%m-%d %H:%M')
+                        except:
+                            last_active = last_active.split('T')[0]
+
+                    # Color state and handle issues
+                    issue = source.get('issue')
+                    if state == "RUNNING":
+                        state = f"[green]{state}[/green]"
+                    elif state == "ERROR":
+                        state = f"[red]{state}[/red]"
+                    elif state == "WARNING":
+                        state = f"[yellow]{state}[/yellow]"
+                    elif state == "OFFLINE":
+                        state = f"[red]{state}[/red]"
+
+                    table.add_row(name, source_type, state, last_active)
+
+                console.print(table)
+                console.print()
+
+            # Show summary info
+            total_data = metadata.get('total_data', len(metrics))
+            console.print(f"[dim]📊 Complete health report showing all {total_data} metrics[/dim]")
+
     except (APIError, QueryError) as e:
         click.echo(f"❌ {e}", err=True)

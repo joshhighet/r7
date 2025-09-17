@@ -16,7 +16,7 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
 -> ic (manage automation jobs, execute workflows)
     -> artifacts, jobs, workflows
 -> siem (search logs, manage alerts/investigations)
-    -> alerts, investigations, logs: query, keys, stats, usage
+    -> alerts, investigations, logs: query, keys, stats, usage, sourcehealth
 -> vm (core vulnerability mgt, console & cloud)
     -> assets, bulk-export, sites, vulns, console: manage assets
 ```
