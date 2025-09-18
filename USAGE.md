@@ -18,6 +18,7 @@ Options:
 
 Commands:
   account  manage users, keys, roles, access etc
+  agents   view insight agents (graphql preview)
   appsec   web app scans, findings
   asm      surface command cypher queries, apps/sdk
   config   manage local configuration
@@ -25,13 +26,13 @@ Commands:
   ic       manage automation jobs, execute workflows
   siem     search logs, manage alerts/investigations
   vm       core vulnerability mgt, console & cloud
-  ```
+```
 
 # SIEM
 
 `logs` is how we interface with the Rapid7 SIEM. This includes searching logs, managing alerts and investigations. There are several helpful notes for when making queries below, however you should always use 'topkeys' when investigating data you haven't worked with before to know which fields are available. You can view a single full log with nothign else like so when required `r7 siem logs query sublime-security 'limit(1)' --output json`
 
-Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys.
+Logs in this SIEM can be queried in three ways - against an individual log, a 'log set' (collection of logs), or everything. By default, in an interactive terminal session, outputs are in formatted tables with commonly sighted keys. datasources can be checked with 'logs health'
 
 Use `r7 siem logs overview` to get an understanding on the logs and log sets available along with their volume. `r7 siem logs examples` shows a few working searches.
 Before making searches, ALWAYS use `r7 siem logs topkeys (id)` to find out the event schema - understand historical data for a collection with `r7 siem logs usage-specific (id)`

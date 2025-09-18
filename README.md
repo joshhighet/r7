@@ -5,6 +5,8 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
 ```zsh
 -> account (management)
     -> features, keys, orgs, products, groups, roles, users
+-> agents (insight agents)
+    -> list, get, summary
 -> appsec (web app scans, findings)
     -> app+scan,list/get
 -> asm (surface command cypher queries, apps/sdk)

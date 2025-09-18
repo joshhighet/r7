@@ -13,6 +13,7 @@ from commands.docs_commands import docs
 from commands.idr_commands import siem_group
 from commands.vm_commands import vm_group
 from commands.ic_commands import ic_group
+from commands.agents_commands import agents
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +45,7 @@ def cli(ctx, api_key, region, org_id, verbose):
 # Register command groups (nested commands are attached within their modules)
 cli.add_command(config_group)
 cli.add_command(account_group)
+cli.add_command(agents)
 cli.add_command(appsec_group)
 # logs_group now part of siem group
 cli.add_command(asm_group)

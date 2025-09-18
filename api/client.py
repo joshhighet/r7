@@ -1175,6 +1175,202 @@ class Rapid7Client:
             }
         }
 
+    def make_graphql_request(self, query, variables=None):
+        """Make a GraphQL request to the Insight platform"""
+        base_url = f"https://{self.region}.api.insight.rapid7.com"
+        url = f"{base_url}/graphql"
+
+        headers = {
+            'X-Api-Key': self.api_key,
+            'Accept-Version': 'kratos',
+            'Content-Type': 'application/json'
+        }
+
+        payload = {
+            'query': query,
+            'variables': variables or {}
+        }
+
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+
+        if response.status_code != 200:
+            raise APIError(f"GraphQL request failed: {response.status_code} - {response.text}")
+
+        result = response.json()
+
+        if 'errors' in result:
+            error_msg = "; ".join([error.get('message', 'Unknown error') for error in result['errors']])
+            raise APIError(f"GraphQL error: {error_msg}")
+
+        return result.get('data', {})
+
+    def get_organization_id(self):
+        """Get the organization ID for the current account"""
+        cache_key = "organization_id"
+        if self.cache_manager:
+            cached_id = self.cache_manager.get('graphql', cache_key)
+            if cached_id:
+                return cached_id
+
+        query = """
+        {
+            organizations(first: 1) {
+                edges {
+                    node {
+                        id
+                        name
+                    }
+                }
+            }
+        }
+        """
+
+        result = self.make_graphql_request(query)
+        organizations = result.get('organizations', {}).get('edges', [])
+
+        if not organizations:
+            raise APIError("No organizations found for this account")
+
+        org_id = organizations[0]['node']['id']
+
+        if self.cache_manager:
+            self.cache_manager.set('graphql', cache_key, org_id, ttl=3600)  # Cache for 1 hour
+
+        return org_id
+
+    def list_agents(self, limit=1000):
+        """List all agents using GraphQL API with automatic pagination"""
+        org_id = self.get_organization_id()
+        all_agents = []
+        after_cursor = None
+
+        while True:
+            query = """
+            query($orgId: String!, $first: Int!, $after: String) {
+                organization(id: $orgId) {
+                    assets(first: $first, after: $after) {
+                        edges {
+                            cursor
+                            node {
+                                id
+                                platform
+                                publicIpAddress
+                                host {
+                                    hostNames {
+                                        name
+                                    }
+                                    vendor
+                                    version
+                                    description
+                                    type
+                                    primaryAddress {
+                                        ip
+                                        mac
+                                    }
+                                }
+                                agent {
+                                    id
+                                    agentSemanticVersion
+                                    agentStatus
+                                    deployTime
+                                    agentLastUpdateTime
+                                    timestamp
+                                }
+                            }
+                        }
+                        pageInfo {
+                            hasNextPage
+                        }
+                    }
+                }
+            }
+            """
+
+            variables = {
+                'orgId': org_id,
+                'first': min(limit, 100),  # GraphQL typically limits to 100 per request
+                'after': after_cursor
+            }
+
+            result = self.make_graphql_request(query, variables)
+            assets = result.get('organization', {}).get('assets', {})
+            edges = assets.get('edges', [])
+
+            # Filter out assets without agents
+            agents_in_batch = []
+            for edge in edges:
+                node = edge['node']
+                if node.get('agent'):  # Only include assets that have an agent
+                    # Extract hostname (use first hostname if available)
+                    hostname = 'Unknown'
+                    if node.get('host') and node['host'].get('hostNames'):
+                        hostnames = node['host']['hostNames']
+                        if hostnames and len(hostnames) > 0:
+                            hostname = hostnames[0]['name']
+
+                    # Extract host details
+                    host_data = node.get('host', {})
+                    primary_addr = host_data.get('primaryAddress', {})
+
+                    # Convert timestamps to readable format
+                    deploy_time = None
+                    last_update = None
+                    if node['agent'].get('deployTime'):
+                        from datetime import datetime
+                        deploy_time = datetime.fromtimestamp(node['agent']['deployTime']).strftime('%Y-%m-%d %H:%M:%S')
+                    if node['agent'].get('agentLastUpdateTime'):
+                        from datetime import datetime
+                        last_update = datetime.fromtimestamp(node['agent']['agentLastUpdateTime']).strftime('%Y-%m-%d %H:%M:%S')
+
+                    agents_in_batch.append({
+                        'asset_id': node['id'],
+                        'agent_id': node['agent']['id'],
+                        'agent_version': node['agent']['agentSemanticVersion'],
+                        'agent_status': node['agent']['agentStatus'],
+                        'hostname': hostname,
+                        'platform': node.get('platform', 'Unknown'),
+                        'public_ip': node.get('publicIpAddress'),
+                        'private_ip': primary_addr.get('ip'),
+                        'mac_address': primary_addr.get('mac'),
+                        'os_vendor': host_data.get('vendor'),
+                        'os_version': host_data.get('version'),
+                        'os_description': host_data.get('description'),
+                        'host_type': host_data.get('type'),
+                        'deploy_time': deploy_time,
+                        'last_update': last_update,
+                        'cursor': edge['cursor']
+                    })
+
+            all_agents.extend(agents_in_batch)
+
+            # Check if we have more pages and haven't hit our limit
+            page_info = assets.get('pageInfo', {})
+            if not page_info.get('hasNextPage') or len(all_agents) >= limit:
+                break
+
+            # Set cursor for next page
+            if edges:
+                after_cursor = edges[-1]['cursor']
+            else:
+                break
+
+        return all_agents[:limit]  # Ensure we don't exceed the requested limit
+
+    def get_agent_details(self, asset_id):
+        """Get detailed information for a specific agent"""
+        # Since there's no direct asset(id:) lookup, we'll search through
+        # the existing agents list which is much more efficient than pagination
+
+        # Get all agents and find the matching one
+        all_agents = self.list_agents(limit=10000)  # Get all agents
+
+        # Find the agent with matching asset_id
+        for agent in all_agents:
+            if agent['asset_id'] == asset_id:
+                return agent
+
+        raise APIError(f"Agent with asset ID {asset_id} not found")
+
 
 class DocsClient:
     """Client for searching Rapid7 documentation via Algolia"""
