@@ -2075,3 +2075,36 @@ def health(ctx, output, no_cache):
 
     except (APIError, QueryError) as e:
         click.echo(f"❌ {e}", err=True)
+
+@siem_logs_group.command(name="datagen")
+@click.argument("generator_type", type=click.Choice(["dns", "firewall", "proxy", "ingress-auth"]))
+@click.option("--host", help="Target host (syslog server or socket target)")
+@click.option("--port", type=int, help="Target port")
+@click.option("--count", type=int, required=True, help="Number of events to generate")
+@click.option("--interval", type=float, default=0, help="Seconds between events (default: 0)")
+@click.option("--config", help="Path to custom YAML config file")
+@click.option("--output", type=click.Choice(["console", "syslog", "socket"]), help="Force output method")
+@click.pass_context
+def datagen_command(ctx, generator_type, host, port, count, interval, config, output):
+    """Generate fake log events for testing
+
+    Examples:
+      r7 siem logs datagen dns --count 100 --host syslog.corp.com --port 514
+      r7 siem logs datagen ingress-auth --count 50 --host insight-idr.highnet --port 1337
+      r7 siem logs datagen firewall --count 10  # console output
+    """
+    from examples.datagen.generator import DataGenerator
+
+    try:
+        generator = DataGenerator(config_path=config)
+        generator.generate_events(
+            generator_type=generator_type,
+            host=host,
+            port=port,
+            count=count,
+            interval=interval,
+            output=output
+        )
+    except Exception as e:
+        click.echo(f"❌ Failed to generate events: {e}", err=True)
+        ctx.exit(1)

