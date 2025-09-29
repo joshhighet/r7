@@ -140,7 +140,7 @@ def get_client_and_config(ctx, api_key=None):
         client = Rapid7Client(final_api_key, region, cache_manager)
         return client, config_manager
     except (ConfigurationError, AuthenticationError) as e:
-        click.echo(f"❌ {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         ctx.exit(1)
 
 @click.group(name='asm')
@@ -212,16 +212,21 @@ def asm_profile(ctx, output):
                 console.print("No profile data found", style="yellow")
                 
     except (APIError, ConfigurationError) as e:
-        click.echo(f"❌ {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
 
-@asm_group.command(name='apps')
+@asm_group.group(name='apps')
+def apps_group():
+    """Surface Command apps management"""
+    pass
+
+@apps_group.command(name='list')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.option('--no-cache', is_flag=True, help='Disable caching for this request')
 @click.option('--all-types', is_flag=True, help='Show all types instead of truncating to first 3')
 @click.option('--exclude-apps', help='Comma-separated list of app IDs to exclude from output')
 @click.option('--full-output', is_flag=True, help='Include all fields in JSON output (default shows minimal fields matching table view)')
 @click.pass_context
-def asm_apps(ctx, output, no_cache, all_types, exclude_apps, full_output):
+def apps_list(ctx, output, no_cache, all_types, exclude_apps, full_output):
     """List Surface Command apps"""
     client, config_manager = get_client_and_config(ctx)
     use_json = should_use_json_output(output, config_manager.get('default_output'))
@@ -349,9 +354,339 @@ def asm_apps(ctx, output, no_cache, all_types, exclude_apps, full_output):
             # Show summary
             total_apps = len(data)
             console.print(f"\n[dim]Total apps: {total_apps}[/dim]")
-                
+
     except (APIError, ConfigurationError) as e:
-        click.echo(f"❌ {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
+
+@apps_group.command(name='health')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.option('--no-cache', is_flag=True, help='Disable caching for this request')
+@click.option('--show-all', is_flag=True, help='Show all apps including those without profiles')
+@click.pass_context
+def apps_health(ctx, output, no_cache, show_all):
+    """Show Surface Command apps health status"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+
+    try:
+        # Get app statuses and profiles in parallel
+        cache_enabled = client.cache_manager and not no_cache
+
+        # Fetch app statuses
+        status_cache_key = "apps_status"
+        app_statuses = None
+        if cache_enabled:
+            app_statuses = client.cache_manager.get('apps_health', status_cache_key)
+
+        if not app_statuses:
+            base_url = client.get_base_url('asm_apps')
+            status_response = client.make_request('GET', f"{base_url}/apps/info/status")
+            if status_response.status_code != 200:
+                raise APIError(f"Failed to get app statuses: {status_response.status_code} - {status_response.text}")
+            app_statuses = status_response.json()
+            if cache_enabled:
+                client.cache_manager.set('apps_health', status_cache_key, app_statuses)
+
+        # Fetch profiles
+        profiles_cache_key = "apps_profiles"
+        profiles = None
+        if cache_enabled:
+            profiles = client.cache_manager.get('apps_health', profiles_cache_key)
+
+        if not profiles:
+            base_url = client.get_base_url('asm_apps')
+            profiles_response = client.make_request('GET', f"{base_url}/profiles")
+            if profiles_response.status_code != 200:
+                raise APIError(f"Failed to get profiles: {profiles_response.status_code} - {profiles_response.text}")
+            profiles = profiles_response.json()
+            if cache_enabled:
+                client.cache_manager.set('apps_health', profiles_cache_key, profiles)
+
+        # Fetch recent execution status for profiles
+        execution_cache_key = "apps_executions"
+        execution_issues = {}
+        if cache_enabled:
+            execution_issues = client.cache_manager.get('apps_health', execution_cache_key) or {}
+
+        if not execution_issues:
+            try:
+                # Get recent executions for all workflows
+                workflow_base = f"https://{client.region}.api.insight.rapid7.com/surface/workflow-api"
+                exec_response = client.make_request('GET', f"{workflow_base}/executions?size=50")
+
+                if exec_response.status_code == 200:
+                    executions = exec_response.json()
+
+                    # Track latest execution status per profile
+                    latest_by_profile = {}
+
+                    for execution in executions:
+                        workflow_id = execution.get('samos_workflow_id', '')
+                        if '/' in workflow_id:
+                            profile_id = workflow_id.split('/')[0]
+                            timestamp = execution.get('timestamp', '')
+                            status = execution.get('status', 'unknown')
+
+                            # Keep only the latest execution per profile
+                            if profile_id not in latest_by_profile or timestamp > latest_by_profile[profile_id]['timestamp']:
+                                latest_by_profile[profile_id] = {
+                                    'status': status,
+                                    'timestamp': timestamp,
+                                    'workflow_id': workflow_id,
+                                    'error_msg': execution.get('workflow_err_msg', execution.get('zeebe_err_msg', ''))
+                                }
+
+                    # Find profiles with execution failures
+                    for profile_id, exec_data in latest_by_profile.items():
+                        if exec_data['status'] in ['error', 'failed', 'timeout']:
+                            execution_issues[profile_id] = exec_data
+
+                    if cache_enabled:
+                        client.cache_manager.set('apps_health', execution_cache_key, execution_issues)
+
+            except Exception as e:
+                if not use_json:
+                    console.print(f"[dim yellow]⚠️ Could not check execution status: {e}[/dim yellow]")
+
+        # Process data
+        status_by_app = {status['id']: status['statuses'] for status in app_statuses}
+        profiles_by_app = {}
+        profile_status_counts = {}
+        orchestrator_ids = set()
+
+        for profile in profiles:
+            app_id = profile.get('integration_id', 'unknown')
+            status = profile.get('status', 'unknown')
+            location = profile.get('location', {})
+
+            if app_id not in profiles_by_app:
+                profiles_by_app[app_id] = []
+            profiles_by_app[app_id].append(profile)
+
+            if status not in profile_status_counts:
+                profile_status_counts[status] = 0
+            profile_status_counts[status] += 1
+
+            if location.get('type') == 'orchestrator' and location.get('id'):
+                orchestrator_ids.add(location['id'])
+
+        # Count apps with issues
+        apps_with_issues = [app_id for app_id, statuses in status_by_app.items() if 'ok' not in statuses]
+        profiles_with_issues = [p for p in profiles if p.get('status') != 'configured']
+        profiles_with_exec_issues = [p for p in profiles if p.get('id') in execution_issues]
+
+        # Safe defaults - data-only apps that don't need connector profiles
+        safe_defaults = {
+            'cisa.exploit.app', 'first.epss.app', 'mitre.attack.app', 'mitre.cwe.app',
+            'nist.nvd.app', 'noetic.builtins.app', 'noetic.dashboard.app', 'noetic.ml.app',
+            'rapid7.command_platform.app', 'combined.vuln.app'
+        }
+
+        apps_without_profiles = [
+            app_id for app_id in status_by_app.keys()
+            if app_id not in profiles_by_app and app_id not in safe_defaults
+        ]
+
+        if use_json:
+            health_data = {
+                'summary': {
+                    'total_apps': len(status_by_app),
+                    'apps_ok': len(status_by_app) - len(apps_with_issues),
+                    'apps_with_issues': len(apps_with_issues),
+                    'total_profiles': len(profiles),
+                    'profiles_configured': profile_status_counts.get('configured', 0),
+                    'profiles_with_issues': len(profiles_with_issues),
+                    'profiles_with_exec_issues': len(profiles_with_exec_issues),
+                    'apps_without_profiles': len(apps_without_profiles),
+                    'orchestrators': len(orchestrator_ids)
+                },
+                'apps_with_issues': apps_with_issues,
+                'profiles_with_issues': profiles_with_issues,
+                'profiles_with_exec_issues': profiles_with_exec_issues,
+                'execution_issues': execution_issues,
+                'apps_without_profiles': apps_without_profiles,
+                'profiles_by_app': profiles_by_app if show_all else {k: v for k, v in profiles_by_app.items() if len(v) > 0}
+            }
+            click.echo(json.dumps(health_data, indent=2))
+        else:
+            # Display summary
+            console.print("[bold]ASM Apps Health Status[/bold]\n")
+
+            # Overview section
+            console.print("[bold cyan]OVERVIEW[/bold cyan]")
+            total_apps = len(status_by_app)
+            apps_ok = total_apps - len(apps_with_issues)
+            console.print(f"  • Total Apps: {total_apps} ({apps_ok} ok, {len(apps_with_issues)} issues)")
+
+            total_profiles = len(profiles)
+            profiles_ok = profile_status_counts.get('configured', 0)
+            profiles_issues = total_profiles - profiles_ok
+
+            # Execution health summary
+            profiles_exec_healthy = total_profiles - len(profiles_with_exec_issues)
+            exec_failed = len(profiles_with_exec_issues)
+
+            console.print(f"  • Total Profiles: {total_profiles} ({profiles_ok} configured, {profiles_issues} config issues)")
+            console.print(f"  • Executions: {profiles_exec_healthy} healthy, {exec_failed} failed")
+            console.print(f"  • Orchestrators: {len(orchestrator_ids)} active")
+            console.print()
+
+            # Issues section
+            if apps_with_issues or profiles_with_issues or profiles_with_exec_issues:
+                console.print("[bold red]ISSUES[/bold red]")
+                if apps_with_issues:
+                    console.print(f"  Apps with issues ({len(apps_with_issues)}):")
+                    for app_id in apps_with_issues:
+                        statuses = ', '.join(status_by_app[app_id])
+                        console.print(f"    • {app_id}: {statuses}")
+
+                if profiles_with_issues:
+                    console.print(f"  Profiles with configuration issues ({len(profiles_with_issues)}):")
+                    for profile in profiles_with_issues:
+                        console.print(f"    • {profile['name']} ({profile['integration_id']}): {profile['status']}")
+
+                if profiles_with_exec_issues:
+                    console.print(f"  Profiles with execution failures ({len(profiles_with_exec_issues)}):")
+                    for profile in profiles_with_exec_issues:
+                        profile_id = profile.get('id')
+                        exec_data = execution_issues.get(profile_id, {})
+                        error_msg = exec_data.get('error_msg', 'Unknown error')
+                        timestamp = exec_data.get('timestamp', '')
+                        # Truncate long error messages
+                        short_error = error_msg[:100] + '...' if len(error_msg) > 100 else error_msg
+                        console.print(f"    • {profile['name']} ({profile['integration_id']}): {short_error}")
+                        if timestamp:
+                            from datetime import datetime
+                            try:
+                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                time_str = dt.strftime('%Y-%m-%d %H:%M UTC')
+                                console.print(f"      Last failed: {time_str}")
+                            except:
+                                pass
+                console.print()
+            else:
+                console.print("[bold green]NO ISSUES DETECTED[/bold green]\n")
+
+            # Profiles table - show individual profiles for better visibility
+            if profiles_by_app:
+                console.print("[bold cyan]CONNECTOR PROFILES[/bold cyan]")
+                table = Table()
+                table.add_column("Profile Name", style="white", width=30)
+                table.add_column("App", style="cyan", width=25)
+                table.add_column("Config", style="green", width=12)
+                table.add_column("Execution", style="blue", width=20)
+                table.add_column("Location", style="dim", width=12)
+
+                excluded_from_display = {
+                    'rapid7.command_platform.app', 'combined.vuln.app'
+                }
+
+                all_profiles = []
+                for app_id, app_profiles in profiles_by_app.items():
+                    if app_id not in excluded_from_display:
+                        for profile in app_profiles:
+                            profile['app_id'] = app_id
+                            all_profiles.append(profile)
+
+                # Sort: execution issues first, then config issues, then healthy
+                def profile_sort_key(profile):
+                    profile_id = profile.get('id')
+                    has_exec_issue = profile_id in execution_issues
+                    has_config_issue = profile.get('status') != 'configured'
+                    return (not has_exec_issue, not has_config_issue, profile.get('name', ''))
+
+                sorted_profiles = sorted(all_profiles, key=profile_sort_key)
+
+                for profile in sorted_profiles:
+                    profile_id = profile.get('id')
+                    profile_name = profile.get('name', 'Unknown')
+                    app_id = profile.get('app_id', '')
+                    config_status = profile.get('status', 'unknown')
+
+                    # Format location display
+                    location = profile.get('location', {})
+                    if location.get('type') == 'saas':
+                        location_display = 'SaaS'
+                    elif location.get('type') == 'orchestrator' and location.get('id'):
+                        orch_id = location['id']
+                        location_display = f"{orch_id[:3]}...{orch_id[-5:]}"
+                    else:
+                        location_display = 'unknown'
+
+                    # Config status with text indicators
+                    if config_status == 'configured':
+                        config_display = "configured"
+                    else:
+                        config_display = f"error: {config_status}"
+
+                    # Execution status
+                    if profile_id in execution_issues:
+                        exec_data = execution_issues[profile_id]
+                        timestamp = exec_data.get('timestamp', '')
+                        if timestamp:
+                            try:
+                                from datetime import datetime, timezone
+                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                now = datetime.now(timezone.utc)
+                                diff = now - dt
+
+                                if diff.days > 0:
+                                    time_ago = f"{diff.days}d ago"
+                                elif diff.seconds > 3600:
+                                    hours = diff.seconds // 3600
+                                    time_ago = f"{hours}h ago"
+                                else:
+                                    minutes = diff.seconds // 60
+                                    time_ago = f"{minutes}m ago"
+
+                                exec_display = f"failed {time_ago}"
+                            except:
+                                exec_display = "failed"
+                        else:
+                            exec_display = "failed"
+                    else:
+                        # Check if we have recent successful execution data
+                        exec_display = "healthy"
+
+                    # Highlight problematic profiles
+                    if profile_id in execution_issues or config_status != 'configured':
+                        profile_name_display = f"[bold red]{profile_name}[/bold red]"
+                        app_display = f"[red]{app_id}[/red]"
+                    else:
+                        profile_name_display = profile_name
+                        app_display = app_id
+
+                    table.add_row(
+                        profile_name_display,
+                        app_display,
+                        config_display,
+                        exec_display,
+                        location_display
+                    )
+
+                console.print(table)
+                console.print()
+
+            # Apps without profiles
+            if apps_without_profiles and (show_all or len(apps_without_profiles) <= 10):
+                console.print("[bold cyan]APPS WITHOUT PROFILES[/bold cyan]")
+                console.print(f"  Found {len(apps_without_profiles)} apps without connector profiles:")
+                for i, app_id in enumerate(sorted(apps_without_profiles), 1):
+                    if i <= 10 or show_all:
+                        console.print(f"    • {app_id}")
+                    elif i == 11:
+                        console.print(f"    ... and {len(apps_without_profiles) - 10} more (use --show-all)")
+                        break
+                console.print()
+            elif apps_without_profiles:
+                console.print(f"[bold cyan]APPS WITHOUT PROFILES[/bold cyan]: {len(apps_without_profiles)} found (use --show-all to list)")
+                console.print()
+
+        if cache_enabled and not use_json:
+            console.print("[dim]Data cached for faster subsequent requests[/dim]")
+
+    except (APIError, ConfigurationError) as e:
+        click.echo(f"Error: {e}", err=True)
 
 @asm_group.group(name='cypher')
 def cypher_group():
@@ -499,7 +834,7 @@ def cypher_query(ctx, query, file, columns, output, limit, start, depth, order, 
             else:
                 console.print("No results found", style="yellow")
     except (APIError, QueryError) as e:
-        click.echo(f"❌ {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
 
 @cypher_group.command(name='docs')
 def cypher_docs():
