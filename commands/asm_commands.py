@@ -404,11 +404,14 @@ def apps_health(ctx, output, no_cache, show_all):
 
         # Fetch recent execution status for profiles
         execution_cache_key = "apps_executions"
+        execution_data = {}
         execution_issues = {}
         if cache_enabled:
-            execution_issues = client.cache_manager.get('apps_health', execution_cache_key) or {}
+            cached = client.cache_manager.get('apps_health', execution_cache_key) or {}
+            execution_data = cached.get('data', {})
+            execution_issues = cached.get('issues', {})
 
-        if not execution_issues:
+        if not execution_data:
             try:
                 # Get recent executions for all workflows
                 workflow_base = f"https://{client.region}.api.insight.rapid7.com/surface/workflow-api"
@@ -426,15 +429,44 @@ def apps_health(ctx, output, no_cache, show_all):
                             profile_id = workflow_id.split('/')[0]
                             timestamp = execution.get('timestamp', '')
                             status = execution.get('status', 'unknown')
+                            exec_id = execution.get('execution_id', '')
 
                             # Keep only the latest execution per profile
                             if profile_id not in latest_by_profile or timestamp > latest_by_profile[profile_id]['timestamp']:
                                 latest_by_profile[profile_id] = {
                                     'status': status,
                                     'timestamp': timestamp,
+                                    'execution_id': exec_id,
                                     'workflow_id': workflow_id,
-                                    'error_msg': execution.get('workflow_err_msg', execution.get('zeebe_err_msg', ''))
+                                    'error_msg': execution.get('workflow_err_msg', execution.get('zeebe_err_msg', '')),
+                                    'duration_seconds': None
                                 }
+
+                    # Calculate duration for completed/failed executions (limit to avoid too many API calls)
+                    # Only calculate for the first 10 most recent profiles
+                    sorted_profiles = sorted(latest_by_profile.items(),
+                                           key=lambda x: x[1]['timestamp'], reverse=True)[:10]
+
+                    for profile_id, exec_info in sorted_profiles:
+                        exec_id = exec_info['execution_id']
+                        if exec_id:
+                            try:
+                                # Get logs to calculate duration
+                                logs_response = client.make_request('GET',
+                                    f"{workflow_base}/executions/{exec_id}/logs?only_user_msgs=true&size=1000&offset=0")
+
+                                if logs_response.status_code == 200:
+                                    logs = logs_response.json()
+                                    if len(logs) >= 2:
+                                        from datetime import datetime
+                                        start_time = datetime.fromisoformat(logs[0]['timestamp'].replace('Z', '+00:00'))
+                                        end_time = datetime.fromisoformat(logs[-1]['timestamp'].replace('Z', '+00:00'))
+                                        duration = (end_time - start_time).total_seconds()
+                                        exec_info['duration_seconds'] = duration
+                            except:
+                                pass  # Duration calculation is best-effort
+
+                    execution_data = latest_by_profile
 
                     # Find profiles with execution failures
                     for profile_id, exec_data in latest_by_profile.items():
@@ -442,11 +474,14 @@ def apps_health(ctx, output, no_cache, show_all):
                             execution_issues[profile_id] = exec_data
 
                     if cache_enabled:
-                        client.cache_manager.set('apps_health', execution_cache_key, execution_issues)
+                        client.cache_manager.set('apps_health', execution_cache_key, {
+                            'data': execution_data,
+                            'issues': execution_issues
+                        })
 
             except Exception as e:
                 if not use_json:
-                    console.print(f"[dim yellow]⚠️ Could not check execution status: {e}[/dim yellow]")
+                    console.print(f"[dim yellow]Could not check execution status: {e}[/dim yellow]")
 
         # Process data
         status_by_app = {status['id']: status['statuses'] for status in app_statuses}
@@ -619,7 +654,10 @@ def apps_health(ctx, output, no_cache, show_all):
                     else:
                         config_display = f"error: {config_status}"
 
-                    # Execution status
+                    # Execution status with duration
+                    exec_info = execution_data.get(profile_id, {})
+                    duration_seconds = exec_info.get('duration_seconds')
+
                     if profile_id in execution_issues:
                         exec_data = execution_issues[profile_id]
                         timestamp = exec_data.get('timestamp', '')
@@ -644,8 +682,19 @@ def apps_health(ctx, output, no_cache, show_all):
                                 exec_display = "failed"
                         else:
                             exec_display = "failed"
+                    elif exec_info:
+                        # Has execution data - format with duration if available
+                        if duration_seconds is not None:
+                            if duration_seconds < 60:
+                                duration_str = f"{int(duration_seconds)}s"
+                            elif duration_seconds < 3600:
+                                duration_str = f"{int(duration_seconds / 60)}m"
+                            else:
+                                duration_str = f"{int(duration_seconds / 3600)}h{int((duration_seconds % 3600) / 60)}m"
+                            exec_display = f"healthy ({duration_str})"
+                        else:
+                            exec_display = "healthy"
                     else:
-                        # Check if we have recent successful execution data
                         exec_display = "healthy"
 
                     # Highlight problematic profiles
@@ -684,6 +733,286 @@ def apps_health(ctx, output, no_cache, show_all):
 
         if cache_enabled and not use_json:
             console.print("[dim]Data cached for faster subsequent requests[/dim]")
+
+    except (APIError, ConfigurationError) as e:
+        click.echo(f"Error: {e}", err=True)
+
+@apps_group.group(name='runlogs')
+def runlogs_group():
+    """View connector execution run logs"""
+    pass
+
+@runlogs_group.command(name='list')
+@click.option('--profile', help='Filter by profile ID')
+@click.option('--limit', type=int, default=20, help='Number of executions to return')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.pass_context
+def runlogs_list(ctx, profile, limit, output):
+    """List execution runs (all or filtered by --profile)"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+
+    try:
+        workflow_base = f"https://{client.region}.api.insight.rapid7.com/surface/workflow-api"
+
+        # Get executions
+        response = client.make_request('GET', f"{workflow_base}/executions?size={limit}")
+
+        if response.status_code != 200:
+            raise APIError(f"Failed to get executions: {response.status_code} - {response.text}")
+
+        executions = response.json()
+
+        # Filter by profile if specified
+        if profile:
+            executions = [e for e in executions if e.get('samos_workflow_id', '').startswith(f"{profile}/")]
+
+        if use_json:
+            click.echo(json.dumps(executions, indent=2))
+        else:
+            if not executions:
+                console.print("No execution runs found", style="yellow")
+                return
+
+            table = Table(title=f"Execution Runs{' for ' + profile if profile else ''}")
+            table.add_column("Execution ID", style="cyan", width=36)
+            table.add_column("Profile ID", style="white", width=36)
+            table.add_column("App", style="blue", width=20)
+            table.add_column("Status", style="green", width=10)
+            table.add_column("Timestamp", style="dim", width=20)
+
+            for execution in executions:
+                exec_id = execution.get('execution_id', '')
+                workflow_id = execution.get('samos_workflow_id', '')
+                status = execution.get('status', 'unknown')
+                timestamp = execution.get('timestamp', '')
+
+                # Parse workflow ID
+                parts = workflow_id.split('/')
+                exec_profile_id = parts[0] if len(parts) > 0 else ''
+                app_id = parts[1] if len(parts) > 1 else ''
+
+                # Format timestamp
+                if timestamp:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        time_display = dt.strftime('%Y-%m-%d %H:%M')
+                    except:
+                        time_display = timestamp[:16]
+                else:
+                    time_display = ''
+
+                # Color status
+                if status == 'completed':
+                    status_display = f"[green]{status}[/green]"
+                elif status in ['error', 'failed']:
+                    status_display = f"[red]{status}[/red]"
+                else:
+                    status_display = status
+
+                table.add_row(exec_id, exec_profile_id, app_id, status_display, time_display)
+
+            console.print(table)
+            console.print(f"\n[dim]Showing {len(executions)} execution(s)[/dim]")
+
+    except (APIError, ConfigurationError) as e:
+        click.echo(f"Error: {e}", err=True)
+
+@runlogs_group.command(name='show')
+@click.argument('run_id')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.pass_context
+def runlogs_show(ctx, run_id, output):
+    """Show execution details for specific run ID"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+
+    try:
+        workflow_base = f"https://{client.region}.api.insight.rapid7.com/surface/workflow-api"
+        exec_id = run_id
+
+        # Get execution logs
+        logs_response = client.make_request('GET',
+            f"{workflow_base}/executions/{exec_id}/logs?only_user_msgs=true&size=1000&offset=0")
+
+        if logs_response.status_code != 200:
+            raise APIError(f"Failed to get execution logs: {logs_response.status_code} - {logs_response.text}")
+
+        logs = logs_response.json()
+
+        # Get execution metadata
+        exec_response = client.make_request('GET', f"{workflow_base}/executions?size=100")
+        execution = None
+        if exec_response.status_code == 200:
+            all_execs = exec_response.json()
+            execution = next((e for e in all_execs if e['execution_id'] == exec_id), None)
+
+        if use_json:
+            output_data = {
+                'execution': execution,
+                'logs': logs
+            }
+            click.echo(json.dumps(output_data, indent=2))
+        else:
+            if execution:
+                console.print(f"[bold cyan]Execution Details[/bold cyan]\n")
+                console.print(f"Execution ID: {exec_id}")
+                console.print(f"Status: {execution.get('status', 'unknown')}")
+                console.print(f"Workflow: {execution.get('samos_workflow_id', '')}")
+                console.print(f"Timestamp: {execution.get('timestamp', '')}")
+
+                # Calculate duration if we have logs
+                if len(logs) >= 2:
+                    try:
+                        from datetime import datetime
+                        start_time = datetime.fromisoformat(logs[0]['timestamp'].replace('Z', '+00:00'))
+                        end_time = datetime.fromisoformat(logs[-1]['timestamp'].replace('Z', '+00:00'))
+                        duration = (end_time - start_time).total_seconds()
+
+                        if duration < 60:
+                            duration_str = f"{int(duration)}s"
+                        elif duration < 3600:
+                            duration_str = f"{int(duration / 60)}m {int(duration % 60)}s"
+                        else:
+                            duration_str = f"{int(duration / 3600)}h {int((duration % 3600) / 60)}m"
+
+                        console.print(f"Duration: {duration_str}")
+                    except:
+                        pass
+
+                console.print()
+
+            # Display logs
+            if logs:
+                console.print(f"[bold cyan]Execution Logs[/bold cyan] ({len(logs)} entries)\n")
+
+                for log in logs:
+                    timestamp = log.get('timestamp', '')
+                    content = log.get('content', {})
+                    message = content.get('message', '')
+                    level = content.get('level', 'INFO')
+
+                    # Format timestamp
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        time_str = dt.strftime('%H:%M:%S')
+                    except:
+                        time_str = timestamp[:8] if timestamp else ''
+
+                    # Color by level
+                    if level == 'ERROR':
+                        console.print(f"[red]{time_str}[/red] {message}")
+                    elif level == 'WARNING':
+                        console.print(f"[yellow]{time_str}[/yellow] {message}")
+                    else:
+                        console.print(f"[dim]{time_str}[/dim] {message}")
+            else:
+                console.print("No logs found", style="yellow")
+
+    except (APIError, ConfigurationError) as e:
+        click.echo(f"Error: {e}", err=True)
+
+@runlogs_group.command(name='latest')
+@click.argument('profile_id')
+@click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@click.pass_context
+def runlogs_latest(ctx, profile_id, output):
+    """Get latest execution for profile ID"""
+    client, config_manager = get_client_and_config(ctx)
+    use_json = should_use_json_output(output, config_manager.get('default_output'))
+
+    try:
+        workflow_base = f"https://{client.region}.api.insight.rapid7.com/surface/workflow-api"
+
+        # Get all executions and find the latest for this profile
+        response = client.make_request('GET', f"{workflow_base}/executions?size=50")
+        if response.status_code != 200:
+            raise APIError(f"Failed to get executions: {response.status_code} - {response.text}")
+
+        all_executions = response.json()
+        profile_executions = [e for e in all_executions if e.get('samos_workflow_id', '').startswith(f"{profile_id}/")]
+
+        if not profile_executions:
+            click.echo(f"No executions found for profile ID: {profile_id}", err=True)
+            return
+
+        # Get the latest execution
+        latest = sorted(profile_executions, key=lambda x: x.get('timestamp', ''), reverse=True)[0]
+        exec_id = latest['execution_id']
+
+        # Get execution logs
+        logs_response = client.make_request('GET',
+            f"{workflow_base}/executions/{exec_id}/logs?only_user_msgs=true&size=1000&offset=0")
+
+        if logs_response.status_code != 200:
+            raise APIError(f"Failed to get execution logs: {logs_response.status_code} - {logs_response.text}")
+
+        logs = logs_response.json()
+
+        if use_json:
+            output_data = {
+                'execution': latest,
+                'logs': logs
+            }
+            click.echo(json.dumps(output_data, indent=2))
+        else:
+            console.print(f"[bold cyan]Latest Execution for Profile[/bold cyan]\n")
+            console.print(f"Profile ID: {profile_id}")
+            console.print(f"Execution ID: {exec_id}")
+            console.print(f"Status: {latest.get('status', 'unknown')}")
+            console.print(f"Workflow: {latest.get('samos_workflow_id', '')}")
+            console.print(f"Timestamp: {latest.get('timestamp', '')}")
+
+            # Calculate duration if we have logs
+            if len(logs) >= 2:
+                try:
+                    from datetime import datetime
+                    start_time = datetime.fromisoformat(logs[0]['timestamp'].replace('Z', '+00:00'))
+                    end_time = datetime.fromisoformat(logs[-1]['timestamp'].replace('Z', '+00:00'))
+                    duration = (end_time - start_time).total_seconds()
+
+                    if duration < 60:
+                        duration_str = f"{int(duration)}s"
+                    elif duration < 3600:
+                        duration_str = f"{int(duration / 60)}m {int(duration % 60)}s"
+                    else:
+                        duration_str = f"{int(duration / 3600)}h {int((duration % 3600) / 60)}m"
+
+                    console.print(f"Duration: {duration_str}")
+                except:
+                    pass
+
+            console.print()
+
+            # Display logs
+            if logs:
+                console.print(f"[bold cyan]Execution Logs[/bold cyan] ({len(logs)} entries)\n")
+
+                for log in logs:
+                    timestamp = log.get('timestamp', '')
+                    content = log.get('content', {})
+                    message = content.get('message', '')
+                    level = content.get('level', 'INFO')
+
+                    # Format timestamp
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        time_str = dt.strftime('%H:%M:%S')
+                    except:
+                        time_str = timestamp[:8] if timestamp else ''
+
+                    # Color by level
+                    if level == 'ERROR':
+                        console.print(f"[red]{time_str}[/red] {message}")
+                    elif level == 'WARNING':
+                        console.print(f"[yellow]{time_str}[/yellow] {message}")
+                    else:
+                        console.print(f"[dim]{time_str}[/dim] {message}")
+            else:
+                console.print("No logs found", style="yellow")
 
     except (APIError, ConfigurationError) as e:
         click.echo(f"Error: {e}", err=True)

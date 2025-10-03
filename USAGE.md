@@ -51,7 +51,7 @@ You can list investigations with `r7 siem investigation list` and retrieve speci
 
 # ASM
 
-`asm` is how we interface with Surface Command's correlative asset graph with relational connectors to various enterprise toolsets.  To understand which connections have been established and the types they make available to us, run `r7 asm apps`. We leverage openCypher (OC) making queries to AgensGraph (not ANSI-SQL). To query data within the asset graph, use `r7 asm cypher` - `r7 asm cypher examples` has a number of basic examples to show correlative properties.
+`asm` is how we interface with Surface Command's correlative asset graph with relational connectors to various enterprise toolsets.  To understand which connections have been established and the types they make available to us, run `r7 asm apps list`. We leverage openCypher (OC) making queries to AgensGraph (not ANSI-SQL). To query data within the asset graph, use `r7 asm cypher` - `r7 asm cypher examples` has a number of basic examples to show correlative properties.
 
 More information can be found on our OC syntax with `r7 asm cypher docs` and examples can be seen with `r7 asm cypher examples`
 A simple asset search may look something like; `r7 asm cypher query 'MATCH (m:Asset) WHERE m.hostnames ISTARTS WITH "multisocks.dark" RETURN m' --columns 'm.name,m.sources,m.hostnames,m.ips'` - Outputs can be pretty verbose, you can process some of this out when you understand the jsonpaths - here's an example: `r7 asm cypher query 'MATCH (m:Machine) RETURN m.name, m.sources, size(m.ips) as ip_count' | jq -r '.items[] | [.data[0], (.data[1] | join(",")), .data[2]] | @tsv'`

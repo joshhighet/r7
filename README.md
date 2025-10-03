@@ -10,7 +10,7 @@ unofficial CLI for interfacing with Rapid7 logsearch, asset graph, web app / net
 -> appsec (web app scans, findings)
     -> app+scan,list/get
 -> asm (surface command cypher queries, apps/sdk)
-    -> cypher, apps, profile, sdk
+    -> cypher, profile, sdk, connector (health, logs)
 -> config (manage local configuration)
     -> cache, cred, reset, set, show, test, validate
 -> docs(search dev docs)
