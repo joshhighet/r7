@@ -7,6 +7,7 @@ from urllib.parse import quote
 from rich.console import Console
 from rich.table import Table
 from api.client import Rapid7Client
+from utils.cli import ClientManager
 from utils.config import ConfigManager
 from utils.cache import CacheManager
 from utils.credentials import CredentialManager
@@ -545,25 +546,9 @@ def get_logs_mapping(client, no_cache=False):
         return {}
 
 def get_client_and_config(ctx, api_key=None):
-    """Get configured API client and config manager"""
-    try:
-        config_manager = ConfigManager()
-        config_manager.validate()
-        final_api_key = CredentialManager.get_api_key(api_key)
-        if not final_api_key:
-            raise AuthenticationError(
-                "No API key found. Use --api-key, set R7_API_KEY environment variable, "
-                "or store in keychain with 'r7 config cred store --api-key YOUR_KEY'"
-            )
-        cache_manager = None
-        if config_manager.get('cache_enabled'):
-            cache_manager = CacheManager(ttl=config_manager.get('cache_ttl'))
-        region = ctx.params.get('region') or config_manager.get('region')
-        client = Rapid7Client(final_api_key, region, cache_manager)
-        return client, config_manager
-    except (ConfigurationError, AuthenticationError) as e:
-        click.echo(f"❌ {e}", err=True)
-        ctx.exit(1)
+    """Use shared ClientManager to acquire (client, config)."""
+    # Preserve api_key override support if provided
+    return ClientManager().get_client_and_config(ctx, api_key=api_key)
 
 # This group will be added to siem_group in idr_commands.py
 @click.group(name='logs')

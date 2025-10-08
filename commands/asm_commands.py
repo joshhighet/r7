@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from api.client import Rapid7Client
+from utils.cli import ClientManager
 from utils.config import ConfigManager
 from utils.cache import CacheManager
 from utils.credentials import CredentialManager
@@ -123,25 +124,8 @@ def should_use_json_output(output_format, config_default):
     return config_default == 'json'
 
 def get_client_and_config(ctx, api_key=None):
-    """Get configured API client and config manager"""
-    try:
-        config_manager = ConfigManager()
-        config_manager.validate()
-        final_api_key = CredentialManager.get_api_key(api_key)
-        if not final_api_key:
-            raise AuthenticationError(
-                "No API key found. Use --api-key, set R7_API_KEY environment variable, "
-                "or store in keychain with 'r7 config cred store --api-key YOUR_KEY'"
-            )
-        cache_manager = None
-        if config_manager.get('cache_enabled'):
-            cache_manager = CacheManager(ttl=config_manager.get('cache_ttl'))
-        region = ctx.params.get('region') or config_manager.get('region')
-        client = Rapid7Client(final_api_key, region, cache_manager)
-        return client, config_manager
-    except (ConfigurationError, AuthenticationError) as e:
-        click.echo(f"Error: {e}", err=True)
-        ctx.exit(1)
+    """Use shared ClientManager to acquire (client, config)."""
+    return ClientManager().get_client_and_config(ctx, api_key=api_key)
 
 @click.group(name='asm')
 def asm_group():
