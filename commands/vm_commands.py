@@ -1,4 +1,3 @@
-import sys
 import json
 import re
 import click
@@ -8,19 +7,11 @@ from rich.table import Table
 from utils.config import ConfigManager
 from utils.credentials import CredentialManager
 from utils.exceptions import APIError, AuthenticationError, ConfigurationError
+from utils.cli import determine_output_format
 from api.insightvm_console import InsightVMConsoleClient
 from api.insightvm_cloud import InsightVMCloudClient
 
 console = Console()
-
-def determine_output_format(output, config):
-    """Determine output format with pipe detection"""
-    if output:
-        return output
-    elif not sys.stdout.isatty():
-        return 'json'
-    else:
-        return config.get('default_output', 'table')
 
 def _get_vm_console_client(config: ConfigManager) -> InsightVMConsoleClient:
     base_url = config.get('vm_console_url')

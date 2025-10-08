@@ -112,6 +112,19 @@ class OutputFormatter:
         click.echo(error_msg, err=True)
 
 
+def determine_output_format(output: Optional[str], config_manager: ConfigManager, default_when_tty: str = 'table') -> str:
+    """Standard output selection with pipe detection.
+
+    Returns one of 'simple' | 'table' | 'json' depending on user flag, TTY, and config.
+    default_when_tty controls the fallback when running interactively.
+    """
+    if output:
+        return output
+    if not sys.stdout.isatty():
+        return 'json'
+    return config_manager.get('default_output', default_when_tty)
+
+
 class ClientManager:
     """Centralized client management and configuration."""
     
