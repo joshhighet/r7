@@ -7,7 +7,7 @@ from utils.config import ConfigManager
 from utils.credentials import CredentialManager
 from utils.exceptions import APIError, AuthenticationError, ConfigurationError
 from api.insightvm_cloud import InsightVMCloudClient
-from utils.cli import determine_output_format
+from utils.cli import determine_output_format, error_handler
 
 console = Console()
 
@@ -116,6 +116,7 @@ def cloud_assets_group():
 @click.option('--hostname', type=str, help='Filter by hostname (case-insensitive substring match)')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
+@error_handler
 def list_cloud_assets(ctx, cursor, size, site_id, asset_id, hostname, output):
     """List assets using Cloud API v4"""
     try:
@@ -306,6 +307,7 @@ def cloud_sites_group():
 @click.option('--details/--no-details', default=False, help='Include detailed site information')
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
 @click.pass_context
+@error_handler
 def list_cloud_sites(ctx, cursor, page, size, details, output):
     """List sites using Cloud API v4"""
     try:

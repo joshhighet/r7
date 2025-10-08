@@ -7,7 +7,7 @@ from rich.table import Table
 from utils.config import ConfigManager
 from utils.credentials import CredentialManager
 from utils.exceptions import APIError, AuthenticationError, ConfigurationError
-from utils.cli import determine_output_format
+from utils.cli import determine_output_format, error_handler
 from api.insightvm_console import InsightVMConsoleClient
 from api.insightvm_cloud import InsightVMCloudClient
 
@@ -68,17 +68,15 @@ vm_group.add_command(bulk_export_group)
 
 
 @console_group.command(name='config-test')
+@error_handler
 def vm_config_test():
     """Validate console URL and credentials by calling /sites (fast sanity)."""
-    try:
-        config = ConfigManager()
-        config.validate()
-        client = _get_vm_console_client(config)
-        data = client.list_sites(page=0, size=1)
-        total = len(data.get('resources', [])) if isinstance(data, dict) else 'unknown'
-        console.print(f"✅ Console reachable. Sites sample count: {total}")
-    except (APIError, AuthenticationError, ConfigurationError) as e:
-        click.echo(f"❌ {e}", err=True)
+    config = ConfigManager()
+    config.validate()
+    client = _get_vm_console_client(config)
+    data = client.list_sites(page=0, size=1)
+    total = len(data.get('resources', [])) if isinstance(data, dict) else 'unknown'
+    console.print(f"✅ Console reachable. Sites sample count: {total}")
 
 
 @console_group.group(name='sites')
@@ -91,6 +89,7 @@ def sites_group():
 @click.option('--page', type=int, default=0, show_default=True)
 @click.option('--size', type=int, default=200, show_default=True)
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@error_handler
 def list_sites(page, size, output):
     """List sites from the console"""
     try:
@@ -132,6 +131,7 @@ def list_sites(page, size, output):
 @sites_group.command(name='get')
 @click.argument('site_id', required=True)
 @click.option('--output', type=click.Choice(['table', 'json']), help='Output format')
+@error_handler
 def get_site(site_id, output):
     """Get a single site by ID"""
     try:
